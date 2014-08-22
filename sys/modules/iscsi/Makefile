@@ -21,5 +21,6 @@ SRCS+=	opt_inet6.h
 
 CFLAGS+= -I${.CURDIR}/../../ofed/include
 #CFLAGS+=-DICL_KERNEL_PROXY
+CFLAGS+=-DCHELSIO_OFFLOAD
 
 .include <bsd.kmod.mk>

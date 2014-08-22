@@ -1275,6 +1275,11 @@ iscsi_ioctl_daemon_wait(struct iscsi_softc *sc,
 		return (0);
 	}
 }
+#ifdef CHELSIO_OFFLOAD
+extern void (*iscsi_ofld_conn)(struct socket *, void *);
+extern void (*iscsi_ofld_setup_ddp)(void *, void *, void *, uint32_t *, int);
+extern void (*iscsi_ofld_cleanup_io)(void *, void *);
+#endif /* CHELSIO_OFFLOAD */
 
 static int
 iscsi_ioctl_daemon_handoff(struct iscsi_softc *sc,
@@ -1324,6 +1329,16 @@ iscsi_ioctl_daemon_handoff(struct iscsi_softc *sc,
 	is->is_max_data_segment_length = handoff->idh_max_data_segment_length;
 	is->is_max_burst_length = handoff->idh_max_burst_length;
 	is->is_first_burst_length = handoff->idh_first_burst_length;
+#ifdef CHELSIO_OFFLOAD
+	/* We need a way to set these values by ofld_driver during login phase. 
+	 * iscsi-daemon should query offload_driver on 1)digest settigns 
+	 * 2)max_xmit_data_length and 3)max_rcv_data_length while sending
+	 * LOGIN pdu. */
+	is->is_max_data_segment_length = 8192;
+	is->is_first_burst_length = 8192;
+	printf("%s: is_max_data_segment_length:0x%lx is_first_burst_length:0x%lx\n",
+		__func__, is->is_max_data_segment_length, is->is_first_burst_length);
+#endif /* CHELSIO_OFFLOAD */
 
 	if (handoff->idh_header_digest == ISCSI_DIGEST_CRC32C)
 		is->is_conn->ic_header_crc32c = true;
@@ -1915,6 +1930,8 @@ iscsi_outstanding_find(struct iscsi_session *is, uint32_t initiator_task_tag)
 
 	ISCSI_SESSION_LOCK_ASSERT(is);
 
+	initiator_task_tag = icl_parse_pdu_tasktag(
+		is->is_conn->ic_socket, initiator_task_tag);
 	TAILQ_FOREACH(io, &is->is_outstanding, io_next) {
 		if (io->io_initiator_task_tag == initiator_task_tag)
 			return (io);
@@ -1954,6 +1971,9 @@ iscsi_outstanding_add(struct iscsi_session *is,
 	}
 	io->io_initiator_task_tag = initiator_task_tag;
 	io->io_ccb = ccb;
+#ifdef CHELSIO_OFFLOAD
+	io->ofld_priv = &io[1];
+#endif /* CHELSIO_OFFLOAD */
 	TAILQ_INSERT_TAIL(&is->is_outstanding, io, io_next);
 	return (io);
 }
@@ -1964,6 +1984,10 @@ iscsi_outstanding_remove(struct iscsi_session *is, struct iscsi_outstanding *io)
 
 	ISCSI_SESSION_LOCK_ASSERT(is);
 
+#ifdef CHELSIO_OFFLOAD
+	/* remove offload driver stuff */
+	iscsi_ofld_cleanup_io(is->is_conn, io->ofld_priv);
+#endif /* CHELSIO_OFFLOAD */
 	TAILQ_REMOVE(&is->is_outstanding, io, io_next);
 	uma_zfree(iscsi_outstanding_zone, io);
 }
@@ -2093,7 +2117,8 @@ iscsi_action_scsiio(struct iscsi_session *is, union ccb *ccb)
 		bhssc->bhssc_flags |= BHSSC_FLAGS_ATTR_UNTAGGED;
 
 	bhssc->bhssc_lun = htobe64(CAM_EXTLUN_BYTE_SWIZZLE(ccb->ccb_h.target_lun));
-	bhssc->bhssc_initiator_task_tag = is->is_initiator_task_tag;
+	bhssc->bhssc_initiator_task_tag =
+		icl_build_tasktag(is->is_initiator_task_tag, maxtags);
 	is->is_initiator_task_tag++;
 	bhssc->bhssc_expected_data_transfer_length = htonl(csio->dxfer_len);
 	KASSERT(csio->cdb_len <= sizeof(bhssc->bhssc_cdb),
@@ -2116,6 +2141,11 @@ iscsi_action_scsiio(struct iscsi_session *is, union ccb *ccb)
 		return;
 	}
 
+#ifdef CHELSIO_OFFLOAD
+	/* OFFLOAD SUPPORT: Programm DDP */
+	iscsi_ofld_setup_ddp(is->is_conn, csio, io,
+				&bhssc->bhssc_initiator_task_tag,0);
+#endif /* CHELSIO_OFFLOAD */
 	if (is->is_immediate_data &&
 	    (csio->ccb_h.flags & CAM_DIR_MASK) == CAM_DIR_OUT) {
 		len = csio->dxfer_len;
@@ -2260,9 +2290,18 @@ iscsi_load(void)
 	TAILQ_INIT(&sc->sc_sessions);
 	cv_init(&sc->sc_cv, "iscsi_cv");
 
+#ifdef CHELSIO_OFFLOAD
+	/* allocate space for offload module to keep its per-task metadata
+	 * need a way for offload driver to pass the size. For now I am
+	 * allocating 16K. */
+	iscsi_outstanding_zone = uma_zcreate("iscsi_outstanding",
+	    sizeof(struct iscsi_outstanding) + (16 * 1024), NULL, NULL, NULL, NULL,
+	    UMA_ALIGN_PTR, 0);
+#else
 	iscsi_outstanding_zone = uma_zcreate("iscsi_outstanding",
 	    sizeof(struct iscsi_outstanding), NULL, NULL, NULL, NULL,
 	    UMA_ALIGN_PTR, 0);
+#endif /* CHELSIO_OFFLOAD */
 
 	error = make_dev_p(MAKEDEV_CHECKNAME, &sc->sc_cdev, &iscsi_cdevsw,
 	    NULL, UID_ROOT, GID_WHEEL, 0600, "iscsi");
@@ -2355,5 +2394,10 @@ moduledata_t iscsi_data = {
 };
 
 DECLARE_MODULE(iscsi, iscsi_data, SI_SUB_DRIVERS, SI_ORDER_MIDDLE);
+#ifdef CHELSIO_OFFLOAD
+/* This is required since I am  calling t4_tom functions directly.
+ * once we decide on the interface details this can be removed */
+MODULE_DEPEND(iscsi, t4_tom, 1, 1, 1);
+#endif /* CHELSIO_OFFLOAD */
 MODULE_DEPEND(iscsi, cam, 1, 1, 1);
 MODULE_DEPEND(iscsi, icl, 1, 1, 1);

@@ -25,5 +25,6 @@ SRCS+=	vnode_if.h
 SRCS+=	opt_cam.h
 
 #CFLAGS+=-DICL_KERNEL_PROXY
+#CFLAGS+=-DCHELSIO_OFFLOAD
 
 .include <bsd.kmod.mk>

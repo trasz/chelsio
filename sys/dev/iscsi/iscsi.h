@@ -45,6 +45,9 @@ struct iscsi_outstanding {
 	size_t				io_received;
 	uint32_t			io_initiator_task_tag;
 	uint32_t			io_datasn;
+#ifdef CHELSIO_OFFLOAD
+	void				*ofld_priv;
+#endif /* CHELSIO_OFFLOAD */
 };
 
 struct iscsi_session {

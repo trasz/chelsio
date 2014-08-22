@@ -144,7 +144,7 @@ icl_conn_receive(struct icl_conn *ic, size_t len)
 	return (m);
 }
 
-static struct icl_pdu *
+struct icl_pdu *
 icl_pdu_new(struct icl_conn *ic, int flags)
 {
 	struct icl_pdu *ip;
@@ -229,7 +229,7 @@ icl_pdu_data_segment_length(const struct icl_pdu *request)
 	return (len);
 }
 
-static void
+void
 icl_pdu_set_data_segment_length(struct icl_pdu *response, uint32_t len)
 {
 
@@ -238,7 +238,7 @@ icl_pdu_set_data_segment_length(struct icl_pdu *response, uint32_t len)
 	response->ip_bhs->bhs_data_segment_len[0] = len >> 16;
 }
 
-static size_t
+size_t
 icl_pdu_padding(const struct icl_pdu *ip)
 {
 
@@ -263,6 +263,27 @@ icl_pdu_size(const struct icl_pdu *response)
 		len += ISCSI_DATA_DIGEST_SIZE;
 
 	return (len);
+}
+#ifdef CHELSIO_OFFLOAD
+extern int (*iscsi_ofld_xmit_pdu)(void *, void *);
+extern int (*iscsi_ofld_parse_pdu_tasktag)(void *, uint32_t);
+#endif /* CHELSIO_OFFLOAD */
+uint32_t icl_build_tasktag(uint32_t tag, uint32_t maxtags)
+{
+#ifdef CHELSIO_OFFLOAD
+	/* itt must be from 0-255, rest of the itt bits are used by HW */
+	return (tag % maxtags);
+#endif /* CHELSIO_OFFLOAD */
+	return tag;
+}
+
+uint32_t icl_parse_pdu_tasktag(struct socket *so, uint32_t tag)
+{
+#ifdef CHELSIO_OFFLOAD
+	/* remove HW modified bits in itt */
+	return (iscsi_ofld_parse_pdu_tasktag(so, tag));
+#endif /* CHELSIO_OFFLOAD */
+	return tag;
 }
 
 static int
@@ -1082,6 +1103,10 @@ void
 icl_pdu_get_data(struct icl_pdu *ip, size_t off, void *addr, size_t len)
 {
 
+#ifdef CHELSIO_OFFLOAD
+	/* data is DDP'ed, no need to copy */
+	if (ip->ip_ofld_prv0) return;
+#endif /* CHELSIO_OFFLOAD */
 	m_copydata(ip->ip_data_mbuf, off, len, addr);
 }
 
@@ -1100,6 +1125,9 @@ icl_pdu_queue(struct icl_pdu *ip)
 		return;
 	}
 
+#ifdef CHELSIO_OFFLOAD
+	iscsi_ofld_xmit_pdu(ic, ip);
+#else
 	if (!STAILQ_EMPTY(&ic->ic_to_send)) {
 		STAILQ_INSERT_TAIL(&ic->ic_to_send, ip, ip_next);
 		/*
@@ -1112,6 +1140,7 @@ icl_pdu_queue(struct icl_pdu *ip)
 
 	STAILQ_INSERT_TAIL(&ic->ic_to_send, ip, ip_next);
 	cv_signal(&ic->ic_send_cv);
+#endif
 }
 
 struct icl_conn *
@@ -1247,6 +1276,10 @@ icl_conn_start(struct icl_conn *ic)
 	return (0);
 }
 
+#ifdef CHELSIO_OFFLOAD
+extern void (*iscsi_ofld_conn)(struct socket *, void *);
+extern void (*iscsi_ofld_cleanup_conn)(struct socket *);
+#endif /* CHELSIO_OFFLOAD */
 int
 icl_conn_handoff(struct icl_conn *ic, int fd)
 {
@@ -1289,6 +1322,10 @@ icl_conn_handoff(struct icl_conn *ic, int fd)
 	ICL_CONN_UNLOCK(ic);
 
 	error = icl_conn_start(ic);
+#ifdef CHELSIO_OFFLOAD
+	if(!error)
+		iscsi_ofld_conn(ic->ic_socket, ic);
+#endif /* CHELSIO_OFFLOAD */
 
 	return (error);
 }
@@ -1353,6 +1390,9 @@ icl_conn_close(struct icl_conn *ic)
 	//ICL_DEBUG("send/receive threads terminated");
 
 	ICL_CONN_UNLOCK(ic);
+#ifdef CHELSIO_OFFLOAD
+		iscsi_ofld_cleanup_conn(ic->ic_socket);
+#endif
 	soclose(ic->ic_socket);
 	ICL_CONN_LOCK(ic);
 	ic->ic_socket = NULL;

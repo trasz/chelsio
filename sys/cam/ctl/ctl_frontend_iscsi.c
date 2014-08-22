@@ -162,6 +162,10 @@ static void	cfiscsi_pdu_handle_task_request(struct icl_pdu *request);
 static void	cfiscsi_pdu_handle_data_out(struct icl_pdu *request);
 static void	cfiscsi_pdu_handle_logout_request(struct icl_pdu *request);
 static void	cfiscsi_session_terminate(struct cfiscsi_session *cs);
+#ifdef CHELSIO_OFFLOAD
+static void cfiscsi_cdw_remove(struct cfiscsi_session *cs,
+                struct cfiscsi_data_wait *cdw);
+#endif
 static struct cfiscsi_target	*cfiscsi_target_find(struct cfiscsi_softc
 		    *softc, const char *name);
 static struct cfiscsi_target	*cfiscsi_target_find_or_create(
@@ -180,6 +184,9 @@ static struct ctl_frontend cfiscsi_frontend =
 };
 CTL_FRONTEND_DECLARE(ctlcfiscsi, cfiscsi_frontend);
 MODULE_DEPEND(ctlcfiscsi, icl, 1, 1, 1);
+#ifdef CHELSIO_OFFLOAD
+MODULE_DEPEND(ctlcfiscsi, t4_tom, 1, 1, 1);
+#endif
 
 static struct icl_pdu *
 cfiscsi_pdu_new_response(struct icl_pdu *request, int flags)
@@ -875,9 +882,16 @@ cfiscsi_pdu_handle_data_out(struct icl_pdu *request)
 	struct cfiscsi_data_wait *cdw = NULL;
 	union ctl_io *io;
 	bool done;
+#ifdef CHELSIO_OFFLOAD
+	uint32_t ttt;
+#endif	
 
 	cs = PDU_SESSION(request);
 	bhsdo = (struct iscsi_bhs_data_out *)request->ip_bhs;
+#ifdef CHELSIO_OFFLOAD
+        ttt = icl_parse_pdu_tasktag(cs->cs_conn->ic_socket, bhsdo->bhsdo_target_transfer_tag);
+        //printf("%s: bhs_ttt:0x%x ttt:0x%x\n", __func__, bhsdo->bhsdo_target_transfer_tag, ttt);
+#endif
 
 	CFISCSI_SESSION_LOCK(cs);
 	TAILQ_FOREACH(cdw, &cs->cs_waiting_for_data_out, cdw_next) {
@@ -888,7 +902,11 @@ cfiscsi_pdu_handle_data_out(struct icl_pdu *request)
 		    bhsdo->bhsdo_initiator_task_tag,
 		    cdw->cdw_target_transfer_tag, cdw->cdw_initiator_task_tag));
 #endif
+#ifdef CHELSIO_OFFLOAD
+                if (ttt ==
+#else
 		if (bhsdo->bhsdo_target_transfer_tag ==
+#endif
 		    cdw->cdw_target_transfer_tag)
 			break;
 	}
@@ -911,7 +929,11 @@ cfiscsi_pdu_handle_data_out(struct icl_pdu *request)
 		CFISCSI_SESSION_LOCK(cs);
 		TAILQ_REMOVE(&cs->cs_waiting_for_data_out, cdw, cdw_next);
 		CFISCSI_SESSION_UNLOCK(cs);
+#ifdef CHELSIO_OFFLOAD
+                cfiscsi_cdw_remove(cs, cdw);
+#else
 		uma_zfree(cfiscsi_data_wait_zone, cdw);
+#endif
 		io->scsiio.be_move_done(io);
 	}
 
@@ -1032,6 +1054,16 @@ cfiscsi_callout(void *context)
 
 	cfiscsi_pdu_queue(cp);
 }
+#ifdef CHELSIO_OFFLOAD
+extern void (*iscsi_ofld_cleanup_io)(void *, void *);
+extern void (*iscsi_ofld_setup_ddp)(void *, void *, void *, uint32_t *, int);
+static void
+cfiscsi_cdw_remove(struct cfiscsi_session *cs, struct cfiscsi_data_wait *cdw)
+{
+        iscsi_ofld_cleanup_io(cs->cs_conn, cdw->ofld_priv);
+        uma_zfree(cfiscsi_data_wait_zone, cdw);
+}
+#endif
 
 static void
 cfiscsi_session_terminate_tasks(struct cfiscsi_session *cs)
@@ -1073,7 +1105,11 @@ cfiscsi_session_terminate_tasks(struct cfiscsi_session *cs)
 		 */
 		cdw->cdw_ctl_io->scsiio.io_hdr.port_status = 42;
 		cdw->cdw_ctl_io->scsiio.be_move_done(cdw->cdw_ctl_io);
+#ifdef CHELSIO_OFFLOAD
+                cfiscsi_cdw_remove(cs, cdw);
+#else
 		uma_zfree(cfiscsi_data_wait_zone, cdw);
+#endif
 		CFISCSI_SESSION_LOCK(cs);
 	}
 	CFISCSI_SESSION_UNLOCK(cs);
@@ -1279,9 +1315,15 @@ cfiscsi_init(void)
 	TAILQ_INIT(&softc->sessions);
 	TAILQ_INIT(&softc->targets);
 
+#ifdef CHELSIO_OFFLOAD
+	cfiscsi_data_wait_zone = uma_zcreate("cfiscsi_data_wait",
+	    sizeof(struct cfiscsi_data_wait) + 16 *1024, NULL, NULL, NULL, NULL,
+	    UMA_ALIGN_PTR, 0);
+#else
 	cfiscsi_data_wait_zone = uma_zcreate("cfiscsi_data_wait",
 	    sizeof(struct cfiscsi_data_wait), NULL, NULL, NULL, NULL,
 	    UMA_ALIGN_PTR, 0);
+#endif
 
 	return (0);
 }
@@ -2579,6 +2621,10 @@ cfiscsi_datamove_out(union ctl_io *io)
 	target_transfer_tag =
 	    atomic_fetchadd_32(&cs->cs_target_transfer_tag, 1);
 
+#ifdef CHELSIO_OFFLOAD
+	target_transfer_tag =
+	    icl_build_tasktag(cs->cs_target_transfer_tag, 255);
+#endif
 #if 0
 	CFISCSI_SESSION_DEBUG(cs, "expecting Data-Out with initiator "
 	    "task tag 0x%x, target transfer tag 0x%x",
@@ -2594,14 +2640,24 @@ cfiscsi_datamove_out(union ctl_io *io)
 		return;
 	}
 	cdw->cdw_ctl_io = io;
+#ifdef CHELSIO_OFFLOAD
+	cdw->ofld_priv = &cdw[1];
+#endif
 	cdw->cdw_target_transfer_tag = target_transfer_tag;
 	cdw->cdw_initiator_task_tag = bhssc->bhssc_initiator_task_tag;
 
+#ifdef CHELSIO_OFFLOAD
+	iscsi_ofld_setup_ddp(cs->cs_conn, cdw, io, &target_transfer_tag, 1);
+#endif
 	if (cs->cs_immediate_data && io->scsiio.kern_rel_offset <
 	    icl_pdu_data_segment_length(request)) {
 		done = cfiscsi_handle_data_segment(request, cdw);
 		if (done) {
+#ifdef CHELSIO_OFFLOAD
+			cfiscsi_cdw_remove(cs, cdw);
+#else
 			uma_zfree(cfiscsi_data_wait_zone, cdw);
+#endif
 			io->scsiio.be_move_done(io);
 			return;
 		}
@@ -2798,7 +2854,11 @@ cfiscsi_task_management_done(union ctl_io *io)
 			TAILQ_REMOVE(&cs->cs_waiting_for_data_out,
 			    cdw, cdw_next);
 			cdw->cdw_ctl_io->scsiio.be_move_done(cdw->cdw_ctl_io);
+#ifdef CHELSIO_OFFLOAD
+	                cfiscsi_cdw_remove(cs, cdw);
+#else
 			uma_zfree(cfiscsi_data_wait_zone, cdw);
+#endif
 		}
 		CFISCSI_SESSION_UNLOCK(cs);
 	}

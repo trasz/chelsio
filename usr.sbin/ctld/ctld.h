@@ -45,7 +45,7 @@
 #define	DEFAULT_BLOCKSIZE		512
 
 #define	MAX_NAME_LEN			223
-#define	MAX_DATA_SEGMENT_LENGTH		(128 * 1024)
+#define	MAX_DATA_SEGMENT_LENGTH		(8 * 1024)
 #define	MAX_BURST_LENGTH		16776192
 
 struct auth {

@@ -55,6 +55,7 @@ struct icl_pdu {
 	uint32_t		ip_prv0;
 	uint32_t		ip_prv1;
 	uint32_t		ip_prv2;
+	uint32_t		ip_ofld_prv0;/* indicate iscsi-inititor that data is DDP'ed */
 };
 
 struct icl_pdu		*icl_pdu_new_bhs(struct icl_conn *ic, int flags);
@@ -63,6 +64,9 @@ int			icl_pdu_append_data(struct icl_pdu *ip, const void *addr, size_t len, int 
 void			icl_pdu_get_data(struct icl_pdu *ip, size_t off, void *addr, size_t len);
 void			icl_pdu_queue(struct icl_pdu *ip);
 void			icl_pdu_free(struct icl_pdu *ip);
+struct icl_pdu * icl_pdu_new(struct icl_conn *ic, int flags);
+void icl_pdu_set_data_segment_length(struct icl_pdu *response, uint32_t len);
+size_t icl_pdu_padding(const struct icl_pdu *ip);
 
 #define ICL_CONN_STATE_INVALID		0
 #define ICL_CONN_STATE_BHS		1
@@ -110,6 +114,8 @@ int			icl_conn_handoff(struct icl_conn *ic, int fd);
 void			icl_conn_shutdown(struct icl_conn *ic);
 void			icl_conn_close(struct icl_conn *ic);
 bool			icl_conn_connected(struct icl_conn *ic);
+uint32_t		icl_build_tasktag(uint32_t tag, uint32_t maxtags);
+uint32_t		icl_parse_pdu_tasktag(struct socket *so, uint32_t tag);
 
 #ifdef ICL_KERNEL_PROXY
 
