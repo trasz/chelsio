@@ -1276,9 +1276,7 @@ iscsi_ioctl_daemon_wait(struct iscsi_softc *sc,
 	}
 }
 #ifdef CHELSIO_OFFLOAD
-extern void (*iscsi_ofld_conn)(struct socket *, void *);
 extern void (*iscsi_ofld_setup_ddp)(void *, void *, void *, uint32_t *, int);
-extern void (*iscsi_ofld_cleanup_io)(void *, void *);
 #endif /* CHELSIO_OFFLOAD */
 
 static int
@@ -1334,8 +1332,6 @@ iscsi_ioctl_daemon_handoff(struct iscsi_softc *sc,
 	 * iscsi-daemon should query offload_driver on 1)digest settigns 
 	 * 2)max_xmit_data_length and 3)max_rcv_data_length while sending
 	 * LOGIN pdu. */
-	is->is_max_data_segment_length = 8192;
-	is->is_first_burst_length = 8192;
 	printf("%s: is_max_data_segment_length:0x%lx is_first_burst_length:0x%lx\n",
 		__func__, is->is_max_data_segment_length, is->is_first_burst_length);
 #endif /* CHELSIO_OFFLOAD */
@@ -1960,6 +1956,7 @@ iscsi_outstanding_add(struct iscsi_session *is,
     uint32_t initiator_task_tag, union ccb *ccb)
 {
 	struct iscsi_outstanding *io;
+	int error;
 
 	ISCSI_SESSION_LOCK_ASSERT(is);
 
@@ -1971,12 +1968,18 @@ iscsi_outstanding_add(struct iscsi_session *is,
 		ISCSI_SESSION_WARN(is, "failed to allocate %zd bytes", sizeof(*io));
 		return (NULL);
 	}
+
+	error = icl_conn_transfer_new(is->is_conn, &io->io_prv);
+	if (error != 0) {
+		ISCSI_SESSION_WARN(is, "icl_transfer_new() failed with error %d", error);
+		uma_zfree(iscsi_outstanding_zone, io);
+		return (NULL);
+	}
+
 	io->io_initiator_task_tag = initiator_task_tag;
 	io->io_ccb = ccb;
-#ifdef CHELSIO_OFFLOAD
-	io->ofld_priv = &io[1];
-#endif /* CHELSIO_OFFLOAD */
 	TAILQ_INSERT_TAIL(&is->is_outstanding, io, io_next);
+
 	return (io);
 }
 
@@ -1986,10 +1989,7 @@ iscsi_outstanding_remove(struct iscsi_session *is, struct iscsi_outstanding *io)
 
 	ISCSI_SESSION_LOCK_ASSERT(is);
 
-#ifdef CHELSIO_OFFLOAD
-	/* remove offload driver stuff */
-	iscsi_ofld_cleanup_io(is->is_conn, io->ofld_priv);
-#endif /* CHELSIO_OFFLOAD */
+	icl_conn_transfer_free(is->is_conn, io->io_prv);
 	TAILQ_REMOVE(&is->is_outstanding, io, io_next);
 	uma_zfree(iscsi_outstanding_zone, io);
 }
@@ -2292,18 +2292,9 @@ iscsi_load(void)
 	TAILQ_INIT(&sc->sc_sessions);
 	cv_init(&sc->sc_cv, "iscsi_cv");
 
-#ifdef CHELSIO_OFFLOAD
-	/* allocate space for offload module to keep its per-task metadata
-	 * need a way for offload driver to pass the size. For now I am
-	 * allocating 16K. */
-	iscsi_outstanding_zone = uma_zcreate("iscsi_outstanding",
-	    sizeof(struct iscsi_outstanding) + (16 * 1024), NULL, NULL, NULL, NULL,
-	    UMA_ALIGN_PTR, 0);
-#else
 	iscsi_outstanding_zone = uma_zcreate("iscsi_outstanding",
 	    sizeof(struct iscsi_outstanding), NULL, NULL, NULL, NULL,
 	    UMA_ALIGN_PTR, 0);
-#endif /* CHELSIO_OFFLOAD */
 
 	error = make_dev_p(MAKEDEV_CHECKNAME, &sc->sc_cdev, &iscsi_cdevsw,
 	    NULL, UID_ROOT, GID_WHEEL, 0600, "iscsi");

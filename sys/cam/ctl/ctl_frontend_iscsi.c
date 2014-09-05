@@ -1049,7 +1049,6 @@ cfiscsi_callout(void *context)
 	cfiscsi_pdu_queue(cp);
 }
 #ifdef CHELSIO_OFFLOAD
-extern void (*iscsi_ofld_cleanup_io)(void *, void *);
 extern void (*iscsi_ofld_setup_ddp)(void *, void *, void *, uint32_t *, int);
 #endif
 
@@ -1057,8 +1056,20 @@ static struct cfiscsi_data_wait *
 cfiscsi_data_wait_new(struct cfiscsi_session *cs)
 {
 	struct cfiscsi_data_wait *cdw;
+	int error;
 
 	cdw = uma_zalloc(cfiscsi_data_wait_zone, M_NOWAIT | M_ZERO);
+	if (cdw == NULL) {
+		CFISCSI_SESSION_WARN(cs, "failed to allocate %zd bytes", sizeof(*cdw));
+		return (NULL);
+	}
+
+	error = icl_conn_transfer_new(is->is_conn, &cdw->cdw_prv);
+	if (error != 0) {
+		CFISCSI_SESSION_WARN(cs, "icl_transfer_new() failed with error %d", error);
+		uma_zfree(cfiscsi_data_wait_zone, cdw);
+		return (NULL);
+	}
 
 	return (cdw);
 }
@@ -1068,9 +1079,7 @@ cfiscsi_data_wait_free(struct cfiscsi_session *cs,
     struct cfiscsi_data_wait *cdw)
 {
 
-#ifdef CHELSIO_OFFLOAD
-	iscsi_ofld_cleanup_io(cs->cs_conn, cdw->ofld_priv);
-#endif
+	icl_conn_transfer_free(cs->cs_conn, cdw->cdw_prv);
 	uma_zfree(cfiscsi_data_wait_zone, cdw);
 }
 
@@ -2658,11 +2667,6 @@ cfiscsi_datamove_out(union ctl_io *io)
 		return;
 	}
 	cdw->cdw_ctl_io = io;
-	
-	/*
-	 * XXX: Erm, what's that for?
-	 */
-	cdw->cdw_prv = &cdw[1];
 	cdw->cdw_target_transfer_tag = target_transfer_tag;
 	cdw->cdw_initiator_task_tag = bhssc->bhssc_initiator_task_tag;
 

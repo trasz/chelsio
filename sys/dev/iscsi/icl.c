@@ -1440,6 +1440,32 @@ icl_conn_connected(struct icl_conn *ic)
 	return (true);
 }
 
+int
+icl_conn_transfer_new(struct icl_conn *ic, void **prvp)
+{
+#ifdef CHELSIO_OFFLOAD
+	void *prv;
+
+	prv = uma_zalloc(icl_transfer_zone, M_NOWAIT | M_ZERO);
+	if (prv == NULL)
+		return (ENOMEM);
+
+	*prvp = io;
+#endif
+
+	return (0);
+}
+
+void
+icl_conn_transfer_free(struct icl_conn *ic, void *prv)
+{
+
+#ifdef CHELSIO_OFFLOAD
+	iscsi_ofld_cleanup_io(ic, prv);
+	uma_zfree(icl_transfer_zone, prv);
+#endif
+}
+
 #ifdef ICL_KERNEL_PROXY
 int
 icl_conn_handoff_sock(struct icl_conn *ic, struct socket *so)
@@ -1474,6 +1500,9 @@ icl_unload(void)
 
 	uma_zdestroy(icl_conn_zone);
 	uma_zdestroy(icl_pdu_zone);
+#ifdef CHELSIO_OFFLOAD
+	uma_zdestroy(icl_transfer_zone);
+#endif
 
 	return (0);
 }
@@ -1488,7 +1517,11 @@ icl_load(void)
 	icl_pdu_zone = uma_zcreate("icl_pdu",
 	    sizeof(struct icl_pdu), NULL, NULL, NULL, NULL,
 	    UMA_ALIGN_PTR, 0);
-
+#ifdef CHELSIO_OFFLOAD
+	icl_transfer_zone = uma_zcreate("iscsi_transfer",
+	    16 * 1024), NULL, NULL, NULL, NULL,
+	    UMA_ALIGN_PTR, 0);
+#endif
 	refcount_init(&icl_ncons, 0);
 }
 
