@@ -59,8 +59,9 @@ extern void	yyrestart(FILE *);
 
 %token ALIAS AUTH_GROUP AUTH_TYPE BACKEND BLOCKSIZE CHAP CHAP_MUTUAL
 %token CLOSING_BRACKET DEBUG DEVICE_ID DISCOVERY_AUTH_GROUP INITIATOR_NAME
-%token INITIATOR_PORTAL LISTEN LISTEN_ISER LUN MAXPROC NUM OPENING_BRACKET
-%token OPTION PATH PIDFILE PORTAL_GROUP SERIAL SIZE STR TARGET TIMEOUT
+%token INITIATOR_PORTAL LISTEN LISTEN_ISER LUN MAXPROC NUM OFFLOAD
+%token OPENING_BRACKET OPTION PATH PIDFILE PORTAL_GROUP SERIAL SIZE STR TARGET
+%token TIMEOUT
 
 %union
 {
@@ -342,6 +343,8 @@ target_entry:
 	|
 	target_initiator_portal
 	|
+	target_offload
+	|
 	target_portal_group
 	|
 	target_lun
@@ -524,6 +527,17 @@ target_initiator_portal:	INITIATOR_PORTAL STR
 		free($2);
 		if (ap == NULL)
 			return (1);
+	}
+	;
+
+target_offload:	OFFLOAD STR
+	{
+		if (target->t_offload != NULL) {
+			log_warnx("offload for target \"%s\" "
+			    "specified more than once", target->t_name);
+			return (1);
+		}
+		target->t_offload = $2;
 	}
 	;
 

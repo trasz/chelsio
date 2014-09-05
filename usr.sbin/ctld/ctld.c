@@ -1080,6 +1080,8 @@ conf_print(struct conf *conf)
 		fprintf(stderr, "target %s {\n", targ->t_name);
 		if (targ->t_alias != NULL)
 			fprintf(stderr, "\t alias %s\n", targ->t_alias);
+		if (targ->t_offload != NULL)
+			fprintf(stderr, "\t offload %s\n", targ->t_offload);
 		TAILQ_FOREACH(lun, &targ->t_luns, l_next) {
 			fprintf(stderr, "\tlun %d {\n", lun->l_lun);
 			fprintf(stderr, "\t\tpath %s\n", lun->l_path);

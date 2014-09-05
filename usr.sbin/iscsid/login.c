@@ -527,9 +527,10 @@ login_negotiate_key(struct connection *conn, const char *name,
 			conn->conn_immediate_data = false;
 	} else if (strcmp(name, "MaxRecvDataSegmentLength") == 0) {
 		tmp = strtoul(value, NULL, 10);
-		if (tmp <= 0)
+		if (tmp <= 0) {
 			log_errx(1, "received invalid "
 			    "MaxRecvDataSegmentLength");
+		}
 		conn->conn_max_data_segment_length = tmp;
 	} else if (strcmp(name, "MaxBurstLength") == 0) {
 		if (conn->conn_immediate_data) {
@@ -593,9 +594,9 @@ login_negotiate(struct connection *conn)
 
 		keys_add(request_keys, "ImmediateData", "Yes");
 		keys_add_int(request_keys, "MaxBurstLength",
-		    ISCSI_MAX_DATA_SEGMENT_LENGTH);
+		    conn->conn_conf.isc_max_data_segment_length);
 		keys_add_int(request_keys, "FirstBurstLength",
-		    ISCSI_MAX_DATA_SEGMENT_LENGTH);
+		    conn->conn_conf.isc_max_data_segment_length);
 		keys_add(request_keys, "InitialR2T", "Yes");
 	} else {
 		keys_add(request_keys, "HeaderDigest", "None");
@@ -603,7 +604,7 @@ login_negotiate(struct connection *conn)
 	}
 
 	keys_add_int(request_keys, "MaxRecvDataSegmentLength",
-	    ISCSI_MAX_DATA_SEGMENT_LENGTH);
+	    conn->conn_conf.isc_max_data_segment_length);
 	keys_add(request_keys, "DefaultTime2Wait", "0");
 	keys_add(request_keys, "DefaultTime2Retain", "0");
 	keys_add(request_keys, "ErrorRecoveryLevel", "0");

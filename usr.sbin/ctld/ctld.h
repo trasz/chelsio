@@ -45,7 +45,7 @@
 #define	DEFAULT_BLOCKSIZE		512
 
 #define	MAX_NAME_LEN			223
-#define	MAX_DATA_SEGMENT_LENGTH		(8 * 1024)
+#define	MAX_DATA_SEGMENT_LENGTH		(128 * 1024)
 #define	MAX_BURST_LENGTH		16776192
 
 struct auth {
@@ -143,6 +143,7 @@ struct target {
 	struct portal_group		*t_portal_group;
 	char				*t_name;
 	char				*t_alias;
+	char				*t_offload;
 };
 
 struct conf {
@@ -184,6 +185,7 @@ struct connection {
 	struct sockaddr_storage	conn_initiator_sa;
 	uint32_t		conn_cmdsn;
 	uint32_t		conn_statsn;
+	size_t			conn_data_segment_limit;
 	size_t			conn_max_data_segment_length;
 	size_t			conn_max_burst_length;
 	int			conn_immediate_data;
@@ -275,6 +277,8 @@ void			kernel_init(void);
 int			kernel_lun_add(struct lun *lun);
 int			kernel_lun_resize(struct lun *lun);
 int			kernel_lun_remove(struct lun *lun);
+void			kernel_limits(const char *offload,
+			    size_t *max_data_segment_length);
 void			kernel_handoff(struct connection *conn);
 int			kernel_port_add(struct target *targ);
 int			kernel_port_remove(struct target *targ);

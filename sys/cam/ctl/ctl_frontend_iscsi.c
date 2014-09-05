@@ -1421,6 +1421,22 @@ cfiscsi_info(void *arg, struct sbuf *sb)
 }
 
 static void
+cfiscsi_ioctl_limits(struct ctl_iscsi *ci)
+{
+	struct ctl_iscsi_limits_params *cilp;
+
+	cilp = (struct ctl_iscsi_limits_params *)&(ci->data);
+
+	CFISCSI_DEBUG("offload is \"%s\"", cilp->offload);
+
+#ifdef CHELSIO_OFFLOAD
+	cilp->data_segment_limit = 8 * 1024;
+#else
+	cilp->data_segment_limit = 128 * 1024;
+#endif
+}
+
+static void
 cfiscsi_ioctl_handoff(struct ctl_iscsi *ci)
 {
 	struct cfiscsi_softc *softc;
@@ -2154,6 +2170,9 @@ cfiscsi_ioctl(struct cdev *dev,
 
 	ci = (struct ctl_iscsi *)addr;
 	switch (ci->type) {
+	case CTL_ISCSI_LIMITS:
+		cfiscsi_ioctl_limits(ci);
+		break;
 	case CTL_ISCSI_HANDOFF:
 		cfiscsi_ioctl_handoff(ci);
 		break;

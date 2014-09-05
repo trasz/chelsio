@@ -32,8 +32,10 @@
  * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGES.
  *
- * $FreeBSD$
  */
+
+#include <sys/cdefs.h>
+__FBSDID("$FreeBSD: head/usr.sbin/ctld/kernel.c 270279 2014-08-21 15:32:38Z trasz $");
 
 #include <sys/ioctl.h>
 #include <sys/types.h>
@@ -780,6 +782,39 @@ kernel_lun_remove(struct lun *lun)
 }
 
 void
+kernel_limits(const char *offload, size_t *max_data_segment_length)
+{
+	struct ctl_iscsi req;
+
+	bzero(&req, sizeof(req));
+
+	req.type = CTL_ISCSI_LIMITS;
+	if (offload != NULL) {
+		strlcpy(req.data.limits.offload, offload,
+		    sizeof(req.data.limits.offload));
+	}
+
+	if (ioctl(ctl_fd, CTL_ISCSI, &req) == -1) {
+		log_err(1, "error issuing CTL_ISCSI ioctl; "
+		    "dropping connection");
+	}
+
+	if (req.status != CTL_ISCSI_OK) {
+		log_errx(1, "error returned from CTL iSCSI limits request: "
+		    "%s; dropping connection", req.error_str);
+	}
+
+	*max_data_segment_length = req.data.limits.data_segment_limit;
+	if (offload != NULL) {
+		log_debugx("MaxRecvDataSegment kernel limit for offload "
+		    "\"%s\" is %zd", offload, *max_data_segment_length);
+	} else {
+		log_debugx("MaxRecvDataSegment kernel limit is %zd",
+		    *max_data_segment_length);
+	}
+}
+
+void
 kernel_handoff(struct connection *conn)
 {
 	struct ctl_iscsi req;
@@ -1033,7 +1068,6 @@ kernel_receive(struct pdu *pdu)
 		log_errx(1, "error returned from CTL iSCSI receive: "
 		    "%s; dropping connection", req.error_str);
 	}
-
 }
 
 #endif /* ICL_KERNEL_PROXY */

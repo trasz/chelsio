@@ -43,6 +43,7 @@
 #define	ISCSI_ADDR_LEN		47	/* INET6_ADDRSTRLEN + '\0' */
 #define	ISCSI_ALIAS_LEN		256	/* XXX: Where did it come from? */
 #define	ISCSI_SECRET_LEN	17	/* 16 + '\0' */
+#define	ISCSI_OFFLOAD_LEN	17	/* 16 + '\0' */
 #define	ISCSI_REASON_LEN	64
 
 #define	ISCSI_DIGEST_NONE	0
@@ -64,7 +65,9 @@ struct iscsi_session_conf {
 	int		isc_discovery;
 	int		isc_header_digest;
 	int		isc_data_digest;
+	int		isc_max_data_segment_length;
 	int		isc_iser;
+	char		isc_offload[ISCSI_OFFLOAD_LEN];
 	int		isc_spare[4];
 };
 
@@ -81,6 +84,7 @@ struct iscsi_session_state {
 	int		iss_immediate_data;
 	int		iss_connected;
 	char		iss_reason[ISCSI_REASON_LEN];
+	char		iss_offload[ISCSI_OFFLOAD_LEN];
 	int		iss_spare[4];
 };
 

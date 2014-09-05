@@ -652,6 +652,7 @@ typedef enum {
 } ctl_iscsi_status;
 
 typedef enum {
+	CTL_ISCSI_LIMITS,
 	CTL_ISCSI_HANDOFF,
 	CTL_ISCSI_LIST,
 	CTL_ISCSI_LOGOUT,
@@ -676,6 +677,14 @@ typedef enum {
 #define	CTL_ISCSI_NAME_LEN	224	/* 223 bytes, by RFC 3720, + '\0' */
 #define	CTL_ISCSI_ADDR_LEN	47	/* INET6_ADDRSTRLEN + '\0' */
 #define	CTL_ISCSI_ALIAS_LEN	128	/* Arbitrary. */
+
+struct ctl_iscsi_limits_params {
+	char			offload[CTL_ISCSI_NAME_LEN];
+						/* passed to kernel */
+	size_t			data_segment_limit;
+						/* passed to userland */
+	int			spare[4];
+};
 
 struct ctl_iscsi_handoff_params {
 	char			initiator_name[CTL_ISCSI_NAME_LEN];
@@ -775,6 +784,7 @@ struct ctl_iscsi_receive_params {
 #endif /* ICL_KERNEL_PROXY */
 
 union ctl_iscsi_data {
+	struct ctl_iscsi_limits_params		limits;
 	struct ctl_iscsi_handoff_params		handoff;
 	struct ctl_iscsi_list_params		list;
 	struct ctl_iscsi_logout_params		logout;

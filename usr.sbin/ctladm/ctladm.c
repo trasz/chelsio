@@ -3425,6 +3425,7 @@ struct cctl_islist_conn {
 	char *header_digest;
 	char *data_digest;
 	char *max_data_segment_length;;
+	char *offload;;
 	int immediate_data;
 	int iser;
 	STAILQ_ENTRY(cctl_islist_conn) links;
@@ -3541,6 +3542,9 @@ cctl_islist_end_element(void *user_data, const char *name)
 		cur_conn->immediate_data = atoi(str);
 	} else if (strcmp(name, "iser") == 0) {
 		cur_conn->iser = atoi(str);
+	} else if (strcmp(name, "offload") == 0) {
+		cur_conn->offload = str;
+		str = NULL;
 	} else if (strcmp(name, "connection") == 0) {
 		islist->cur_conn = NULL;
 	} else if (strcmp(name, "ctlislist") == 0) {
@@ -3650,6 +3654,7 @@ retry:
 			printf("DataSegmentLen:   %s\n", conn->max_data_segment_length);
 			printf("ImmediateData:    %s\n", conn->immediate_data ? "Yes" : "No");
 			printf("iSER (RDMA):      %s\n", conn->iser ? "Yes" : "No");
+			printf("Offload:          %s\n", conn->offload);
 			printf("\n");
 		}
 	} else {
