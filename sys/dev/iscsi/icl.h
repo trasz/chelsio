@@ -118,6 +118,7 @@ uint32_t		icl_build_tasktag(uint32_t tag, uint32_t maxtags);
 uint32_t		icl_parse_pdu_tasktag(struct socket *so, uint32_t tag);
 int			icl_conn_transfer_new(struct icl_conn *ic, void **prvp);
 void			icl_conn_transfer_free(struct icl_conn *ic, void *prv);
+int			icl_limits(const char *name, size_t *limitp);
 
 #ifdef ICL_KERNEL_PROXY
 

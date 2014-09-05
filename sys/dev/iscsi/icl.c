@@ -1466,6 +1466,21 @@ icl_conn_transfer_free(struct icl_conn *ic, void *prv)
 #endif
 }
 
+int
+icl_limits(const char *name, size_t *limitp)
+{
+
+	ICL_DEBUG("offload is \"%s\"", name);
+
+#ifdef CHELSIO_OFFLOAD
+	*limitp = 16 * 1024;
+#else
+	*limitp = 128 * 1024;
+#endif
+
+	return (0);
+}
+
 #ifdef ICL_KERNEL_PROXY
 int
 icl_conn_handoff_sock(struct icl_conn *ic, struct socket *so)

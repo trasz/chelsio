@@ -1681,7 +1681,11 @@ iscsi_ioctl_session_add(struct iscsi_softc *sc, struct iscsi_session_add *isa)
 
 	is = malloc(sizeof(*is), M_ISCSI, M_ZERO | M_WAITOK);
 	memcpy(&is->is_conf, &isa->isa_conf, sizeof(is->is_conf));
-	is->is_conf.isc_max_data_segment_length = ISCSI_MAX_DATA_SEGMENT_LENGTH;
+
+	error = icl_limits(isa->isa_conf.isc_offload,
+	    &is->is_conf.isc_max_data_segment_length);
+	if (error != 0)
+		return (error);
 
 	sx_xlock(&sc->sc_lock);
 
@@ -1867,7 +1871,16 @@ iscsi_ioctl_session_modify(struct iscsi_softc *sc,
 	sx_xunlock(&sc->sc_lock);
 
 	memcpy(&is->is_conf, &ism->ism_conf, sizeof(is->is_conf));
-	is->is_conf.isc_max_data_segment_length = ISCSI_MAX_DATA_SEGMENT_LENGTH;
+
+	/*
+	 * Right now we don't have a way for userland to override
+	 * this value.
+	 *
+	 * XXX: How to handle errors here?
+	 */
+	icl_limits(isa->isa_conf.isc_offload,
+	    &is->is_conf.isc_max_data_segment_length);
+
 	ISCSI_SESSION_UNLOCK(is);
 
 	iscsi_session_reconnect(is);
