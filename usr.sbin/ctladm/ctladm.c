@@ -3654,7 +3654,7 @@ retry:
 			printf("DataSegmentLen:   %s\n", conn->max_data_segment_length);
 			printf("ImmediateData:    %s\n", conn->immediate_data ? "Yes" : "No");
 			printf("iSER (RDMA):      %s\n", conn->iser ? "Yes" : "No");
-			printf("Offload:          %s\n", conn->offload);
+			printf("Offload driver:   %s\n", conn->offload);
 			printf("\n");
 		}
 	} else {

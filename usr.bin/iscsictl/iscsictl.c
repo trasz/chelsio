@@ -518,7 +518,7 @@ kernel_list(int iscsi_fd, const struct target *targ __unused,
 			    state->iss_immediate_data ? "Yes" : "No");
 			printf("iSER (RDMA):      %s\n",
 			    conf->isc_iser ? "Yes" : "No");
-			printf("Offload:          %s\n", state->iss_offload);
+			printf("Offload driver:   %s\n", state->iss_offload);
 			printf("Device nodes:     ");
 			print_periphs(state->iss_id);
 			printf("\n\n");
