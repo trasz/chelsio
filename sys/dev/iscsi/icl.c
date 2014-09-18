@@ -79,6 +79,9 @@ SYSCTL_INT(_kern_icl, OID_AUTO, recvspace, CTLFLAG_RWTUN,
 
 static uma_zone_t icl_conn_zone;
 static uma_zone_t icl_pdu_zone;
+#ifdef CHELSIO_OFFLOAD
+static uma_zone_t icl_transfer_zone;
+#endif
 
 static volatile u_int	icl_ncons;
 
@@ -102,6 +105,7 @@ static volatile u_int	icl_ncons;
 #define ICL_CONN_LOCK_ASSERT_NOT(X)	mtx_assert(X->ic_lock, MA_NOTOWNED)
 
 STAILQ_HEAD(icl_pdu_stailq, icl_pdu);
+
 
 static void
 icl_conn_fail(struct icl_conn *ic)
@@ -264,27 +268,20 @@ icl_pdu_size(const struct icl_pdu *response)
 
 	return (len);
 }
+
 #ifdef CHELSIO_OFFLOAD
 extern int (*iscsi_ofld_xmit_pdu)(void *, void *);
-extern int (*iscsi_ofld_parse_pdu_tasktag)(void *, uint32_t);
-#endif /* CHELSIO_OFFLOAD */
-uint32_t icl_build_tasktag(uint32_t tag, uint32_t maxtags)
-{
-#ifdef CHELSIO_OFFLOAD
-	/* itt must be from 0-255, rest of the itt bits are used by HW */
-	return (tag % maxtags);
-#endif /* CHELSIO_OFFLOAD */
-	return tag;
-}
 
-uint32_t icl_parse_pdu_tasktag(struct socket *so, uint32_t tag)
+static uint32_t
+icl_conn_build_tasktag(struct icl_conn *ic, uint32_t tag)
 {
-#ifdef CHELSIO_OFFLOAD
-	/* remove HW modified bits in itt */
-	return (iscsi_ofld_parse_pdu_tasktag(so, tag));
-#endif /* CHELSIO_OFFLOAD */
-	return tag;
+
+	/* itt must be from 0-255, rest of the itt bits are used by HW */
+	return (tag % 255);
+
+	return (tag);
 }
+#endif /* CHELSIO_OFFLOAD */
 
 static int
 icl_pdu_receive_bhs(struct icl_pdu *request, size_t *availablep)
@@ -1144,7 +1141,7 @@ icl_pdu_queue(struct icl_pdu *ip)
 }
 
 struct icl_conn *
-icl_conn_new(const char *name, struct mtx *lock)
+icl_conn_new(const char *offload, const char *name, struct mtx *lock)
 {
 	struct icl_conn *ic;
 
@@ -1161,6 +1158,8 @@ icl_conn_new(const char *name, struct mtx *lock)
 #endif
 	ic->ic_max_data_segment_length = ICL_MAX_DATA_SEGMENT_LENGTH;
 	ic->ic_name = name;
+	// XXX
+	ic->ic_offload = strdup(offload, M_TEMP);
 
 	return (ic);
 }
@@ -1440,17 +1439,27 @@ icl_conn_connected(struct icl_conn *ic)
 	return (true);
 }
 
+#ifdef CHELSIO_OFFLOAD
+extern void (*iscsi_ofld_setup_ddp)(void *, void *, void *, void *, uint32_t *, int);
+extern void (*iscsi_ofld_cleanup_io)(void *ic, void *prv);
+#endif
+
 int
-icl_conn_transfer_new(struct icl_conn *ic, void **prvp)
+icl_conn_transfer_new(struct icl_conn *ic, void **prvp, void *iop,
+    void *iop2, uint32_t *tag, bool target_side)
 {
 #ifdef CHELSIO_OFFLOAD
 	void *prv;
+
+	*tag = icl_conn_build_tasktag(ic, *tag);
 
 	prv = uma_zalloc(icl_transfer_zone, M_NOWAIT | M_ZERO);
 	if (prv == NULL)
 		return (ENOMEM);
 
-	*prvp = io;
+	*prvp = iop;
+
+	iscsi_ofld_setup_ddp(ic, prvp, iop, iop2, tag, target_side);
 #endif
 
 	return (0);
@@ -1469,8 +1478,6 @@ icl_conn_transfer_free(struct icl_conn *ic, void *prv)
 int
 icl_limits(const char *name, size_t *limitp)
 {
-
-	ICL_DEBUG("offload is \"%s\"", name);
 
 #ifdef CHELSIO_OFFLOAD
 	*limitp = 16 * 1024;
@@ -1533,8 +1540,8 @@ icl_load(void)
 	    sizeof(struct icl_pdu), NULL, NULL, NULL, NULL,
 	    UMA_ALIGN_PTR, 0);
 #ifdef CHELSIO_OFFLOAD
-	icl_transfer_zone = uma_zcreate("iscsi_transfer",
-	    16 * 1024), NULL, NULL, NULL, NULL,
+	icl_transfer_zone = uma_zcreate("icl_transfer",
+	    16 * 1024, NULL, NULL, NULL, NULL,
 	    UMA_ALIGN_PTR, 0);
 #endif
 	refcount_init(&icl_ncons, 0);
@@ -1562,4 +1569,9 @@ moduledata_t icl_data = {
 };
 
 DECLARE_MODULE(icl, icl_data, SI_SUB_DRIVERS, SI_ORDER_FIRST);
+#ifdef CHELSIO_OFFLOAD
+/* This is required since I am  calling t4_tom functions directly.
+ * once we decide on the interface details this can be removed */
+MODULE_DEPEND(iscsi, t4_tom, 1, 1, 1);
+#endif /* CHELSIO_OFFLOAD */
 MODULE_VERSION(icl, 1);

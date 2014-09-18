@@ -65,7 +65,7 @@ struct iscsi_session_conf {
 	int		isc_discovery;
 	int		isc_header_digest;
 	int		isc_data_digest;
-	int		isc_max_data_segment_length;
+	size_t		isc_max_data_segment_length;
 	int		isc_iser;
 	char		isc_offload[ISCSI_OFFLOAD_LEN];
 	int		isc_spare[4];

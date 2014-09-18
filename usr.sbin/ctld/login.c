@@ -797,6 +797,8 @@ login_negotiate(struct connection *conn, struct pdu *request)
 		assert(conn->conn_target != NULL);
 		kernel_limits(conn->conn_target->t_offload,
 		    &conn->conn_data_segment_limit);
+	} else {
+		conn->conn_data_segment_limit = MAX_DATA_SEGMENT_LENGTH;
 	}
 
 	if (request == NULL) {

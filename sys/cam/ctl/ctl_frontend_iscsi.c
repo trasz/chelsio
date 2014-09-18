@@ -162,12 +162,17 @@ static void	cfiscsi_pdu_handle_task_request(struct icl_pdu *request);
 static void	cfiscsi_pdu_handle_data_out(struct icl_pdu *request);
 static void	cfiscsi_pdu_handle_logout_request(struct icl_pdu *request);
 static void	cfiscsi_session_terminate(struct cfiscsi_session *cs);
+static struct cfiscsi_data_wait	*cfiscsi_data_wait_new(
+		    struct cfiscsi_session *cs, union ctl_io *io,
+		    uint32_t initiator_task_tag,
+		    uint32_t *target_transfer_tagp);
 static void	cfiscsi_data_wait_free(struct cfiscsi_session *cs,
 		    struct cfiscsi_data_wait *cdw);
 static struct cfiscsi_target	*cfiscsi_target_find(struct cfiscsi_softc
 		    *softc, const char *name);
 static struct cfiscsi_target	*cfiscsi_target_find_or_create(
-    struct cfiscsi_softc *softc, const char *name, const char *alias);
+		    struct cfiscsi_softc *softc, const char *name,
+		    const char *alias);
 static void	cfiscsi_target_release(struct cfiscsi_target *ct);
 static void	cfiscsi_session_delete(struct cfiscsi_session *cs);
 
@@ -182,9 +187,6 @@ static struct ctl_frontend cfiscsi_frontend =
 };
 CTL_FRONTEND_DECLARE(ctlcfiscsi, cfiscsi_frontend);
 MODULE_DEPEND(ctlcfiscsi, icl, 1, 1, 1);
-#ifdef CHELSIO_OFFLOAD
-MODULE_DEPEND(ctlcfiscsi, t4_tom, 1, 1, 1);
-#endif
 
 static struct icl_pdu *
 cfiscsi_pdu_new_response(struct icl_pdu *request, int flags)
@@ -880,16 +882,9 @@ cfiscsi_pdu_handle_data_out(struct icl_pdu *request)
 	struct cfiscsi_data_wait *cdw = NULL;
 	union ctl_io *io;
 	bool done;
-#ifdef CHELSIO_OFFLOAD
-	uint32_t ttt;
-#endif	
 
 	cs = PDU_SESSION(request);
 	bhsdo = (struct iscsi_bhs_data_out *)request->ip_bhs;
-#ifdef CHELSIO_OFFLOAD
-        ttt = icl_parse_pdu_tasktag(cs->cs_conn->ic_socket, bhsdo->bhsdo_target_transfer_tag);
-        //printf("%s: bhs_ttt:0x%x ttt:0x%x\n", __func__, bhsdo->bhsdo_target_transfer_tag, ttt);
-#endif
 
 	CFISCSI_SESSION_LOCK(cs);
 	TAILQ_FOREACH(cdw, &cs->cs_waiting_for_data_out, cdw_next) {
@@ -900,11 +895,7 @@ cfiscsi_pdu_handle_data_out(struct icl_pdu *request)
 		    bhsdo->bhsdo_initiator_task_tag,
 		    cdw->cdw_target_transfer_tag, cdw->cdw_initiator_task_tag));
 #endif
-#ifdef CHELSIO_OFFLOAD
-                if (ttt ==
-#else
 		if (bhsdo->bhsdo_target_transfer_tag ==
-#endif
 		    cdw->cdw_target_transfer_tag)
 			break;
 	}
@@ -1048,28 +1039,33 @@ cfiscsi_callout(void *context)
 
 	cfiscsi_pdu_queue(cp);
 }
-#ifdef CHELSIO_OFFLOAD
-extern void (*iscsi_ofld_setup_ddp)(void *, void *, void *, uint32_t *, int);
-#endif
 
 static struct cfiscsi_data_wait *
-cfiscsi_data_wait_new(struct cfiscsi_session *cs)
+cfiscsi_data_wait_new(struct cfiscsi_session *cs, union ctl_io *io,
+    uint32_t initiator_task_tag, uint32_t *target_transfer_tagp)
 {
 	struct cfiscsi_data_wait *cdw;
 	int error;
 
 	cdw = uma_zalloc(cfiscsi_data_wait_zone, M_NOWAIT | M_ZERO);
 	if (cdw == NULL) {
-		CFISCSI_SESSION_WARN(cs, "failed to allocate %zd bytes", sizeof(*cdw));
+		CFISCSI_SESSION_WARN(cs,
+		    "failed to allocate %zd bytes", sizeof(*cdw));
 		return (NULL);
 	}
 
-	error = icl_conn_transfer_new(is->is_conn, &cdw->cdw_prv);
+	error = icl_conn_transfer_new(cs->cs_conn, &cdw->cdw_prv, cdw,
+	    io, target_transfer_tagp, true);
 	if (error != 0) {
-		CFISCSI_SESSION_WARN(cs, "icl_transfer_new() failed with error %d", error);
+		CFISCSI_SESSION_WARN(cs,
+		    "icl_transfer_new() failed with error %d", error);
 		uma_zfree(cfiscsi_data_wait_zone, cdw);
 		return (NULL);
 	}
+
+	cdw->cdw_ctl_io = io;
+	cdw->cdw_target_transfer_tag = *target_transfer_tagp;
+	cdw->cdw_initiator_task_tag = initiator_task_tag;
 
 	return (cdw);
 }
@@ -1237,7 +1233,7 @@ cfiscsi_session_unregister_initiator(struct cfiscsi_session *cs)
 }
 
 static struct cfiscsi_session *
-cfiscsi_session_new(struct cfiscsi_softc *softc)
+cfiscsi_session_new(struct cfiscsi_softc *softc, const char *offload)
 {
 	struct cfiscsi_session *cs;
 	int error;
@@ -1257,7 +1253,7 @@ cfiscsi_session_new(struct cfiscsi_softc *softc)
 	cv_init(&cs->cs_login_cv, "cfiscsi_login");
 #endif
 
-	cs->cs_conn = icl_conn_new("cfiscsi", &cs->cs_lock);
+	cs->cs_conn = icl_conn_new(offload, "cfiscsi", &cs->cs_lock);
 	cs->cs_conn->ic_receive = cfiscsi_receive_callback;
 	cs->cs_conn->ic_error = cfiscsi_error_callback;
 	cs->cs_conn->ic_prv0 = cs;
@@ -1342,7 +1338,7 @@ cfiscsi_accept(struct socket *so, struct sockaddr *sa, int portal_id)
 {
 	struct cfiscsi_session *cs;
 
-	cs = cfiscsi_session_new(&cfiscsi_softc);
+	cs = cfiscsi_session_new(&cfiscsi_softc, "");
 	if (cs == NULL) {
 		CFISCSI_WARN("failed to create session");
 		return;
@@ -1498,7 +1494,7 @@ cfiscsi_ioctl_handoff(struct ctl_iscsi *ci)
 		mtx_unlock(&cfiscsi_softc.lock);
 	} else {
 #endif
-		cs = cfiscsi_session_new(softc);
+		cs = cfiscsi_session_new(softc, cihp->offload);
 		if (cs == NULL) {
 			ci->status = CTL_ISCSI_ERROR;
 			snprintf(ci->error_str, sizeof(ci->error_str),
@@ -1638,6 +1634,7 @@ cfiscsi_ioctl_list(struct ctl_iscsi *ci)
 		    "<max_data_segment_length>%zd</max_data_segment_length>"
 		    "<immediate_data>%d</immediate_data>"
 		    "<iser>%d</iser>"
+		    "<offload>%s</offload>"
 		    "</connection>\n",
 		    cs->cs_id,
 		    cs->cs_initiator_name, cs->cs_initiator_addr, cs->cs_initiator_alias,
@@ -1646,7 +1643,8 @@ cfiscsi_ioctl_list(struct ctl_iscsi *ci)
 		    cs->cs_conn->ic_data_crc32c ? "CRC32C" : "None",
 		    cs->cs_max_data_segment_length,
 		    cs->cs_immediate_data,
-		    cs->cs_conn->ic_iser);
+		    cs->cs_conn->ic_iser,
+		    cs->cs_conn->ic_offload);
 		if (error != 0)
 			break;
 	}
@@ -2645,16 +2643,8 @@ cfiscsi_datamove_out(union ctl_io *io)
 	target_transfer_tag =
 	    atomic_fetchadd_32(&cs->cs_target_transfer_tag, 1);
 
-#ifdef CHELSIO_OFFLOAD
-	target_transfer_tag =
-	    icl_build_tasktag(cs->cs_target_transfer_tag, 255);
-#endif
-#if 0
-	CFISCSI_SESSION_DEBUG(cs, "expecting Data-Out with initiator "
-	    "task tag 0x%x, target transfer tag 0x%x",
-	    bhssc->bhssc_initiator_task_tag, target_transfer_tag);
-#endif
-	cdw = cfiscsi_data_wait_new(cs);
+	cdw = cfiscsi_data_wait_new(cs, io, bhssc->bhssc_initiator_task_tag,
+	    &target_transfer_tag);
 	if (cdw == NULL) {
 		CFISCSI_SESSION_WARN(cs, "failed to "
 		    "allocate memory; dropping connection");
@@ -2663,13 +2653,13 @@ cfiscsi_datamove_out(union ctl_io *io)
 		cfiscsi_session_terminate(cs);
 		return;
 	}
-	cdw->cdw_ctl_io = io;
-	cdw->cdw_target_transfer_tag = target_transfer_tag;
-	cdw->cdw_initiator_task_tag = bhssc->bhssc_initiator_task_tag;
 
-#ifdef CHELSIO_OFFLOAD
-	iscsi_ofld_setup_ddp(cs->cs_conn, cdw, io, &target_transfer_tag, 1);
+#if 0
+	CFISCSI_SESSION_DEBUG(cs, "expecting Data-Out with initiator "
+	    "task tag 0x%x, target transfer tag 0x%x",
+	    bhssc->bhssc_initiator_task_tag, target_transfer_tag);
 #endif
+
 	if (cs->cs_immediate_data && io->scsiio.kern_rel_offset <
 	    icl_pdu_data_segment_length(request)) {
 		done = cfiscsi_handle_data_segment(request, cdw);

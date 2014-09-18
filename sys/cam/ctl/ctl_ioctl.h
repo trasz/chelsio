@@ -692,6 +692,7 @@ struct ctl_iscsi_handoff_params {
 	char			initiator_alias[CTL_ISCSI_ALIAS_LEN];
 	uint8_t			initiator_isid[6];
 	char			target_name[CTL_ISCSI_NAME_LEN];
+	char			offload[CTL_ISCSI_NAME_LEN];
 	int			socket;
 	int			portal_group_tag;
 	
