@@ -58,7 +58,6 @@ struct icl_pdu {
 	uint32_t		ip_ofld_prv0;/* indicate iscsi-inititor that data is DDP'ed */
 };
 
-struct icl_pdu		*icl_pdu_new_bhs(struct icl_conn *ic, int flags);
 size_t			icl_pdu_data_segment_length(const struct icl_pdu *ip);
 int			icl_pdu_append_data(struct icl_pdu *ip, const void *addr, size_t len, int flags);
 void			icl_pdu_get_data(struct icl_pdu *ip, size_t off, void *addr, size_t len);
@@ -66,7 +65,7 @@ void			icl_pdu_queue(struct icl_pdu *ip);
 void			icl_pdu_free(struct icl_pdu *ip);
 
 #if defined(CHELSIO_OFFLOAD) || 1
-struct icl_pdu		 *icl_pdu_new(struct icl_conn *ic, int flags);
+struct icl_pdu		 *icl_conn_new_pdu(struct icl_conn *ic, int flags);
 void			icl_pdu_set_data_segment_length(struct icl_pdu *response, uint32_t len);
 size_t			icl_pdu_padding(const struct icl_pdu *ip);
 #endif
@@ -112,6 +111,7 @@ struct icl_conn {
 	void			*ic_prv0;
 };
 
+struct icl_pdu		*icl_conn_new_pdu_bhs(struct icl_conn *ic, int flags);
 struct icl_conn		*icl_conn_new(const char *offload, const char *name, struct mtx *lock);
 void			icl_conn_free(struct icl_conn *ic);
 int			icl_conn_handoff(struct icl_conn *ic, int fd);

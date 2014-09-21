@@ -149,7 +149,7 @@ icl_conn_receive(struct icl_conn *ic, size_t len)
 }
 
 struct icl_pdu *
-icl_pdu_new(struct icl_conn *ic, int flags)
+icl_conn_new_pdu(struct icl_conn *ic, int flags)
 {
 	struct icl_pdu *ip;
 
@@ -190,11 +190,11 @@ icl_pdu_free(struct icl_pdu *ip)
  * Allocate icl_pdu with empty BHS to fill up by the caller.
  */
 struct icl_pdu *
-icl_pdu_new_bhs(struct icl_conn *ic, int flags)
+icl_conn_new_pdu_bhs(struct icl_conn *ic, int flags)
 {
 	struct icl_pdu *ip;
 
-	ip = icl_pdu_new(ic, flags);
+	ip = icl_conn_new_pdu(ic, flags);
 	if (ip == NULL)
 		return (NULL);
 
@@ -558,7 +558,7 @@ icl_conn_receive_pdu(struct icl_conn *ic, size_t *availablep)
 	if (ic->ic_receive_state == ICL_CONN_STATE_BHS) {
 		KASSERT(ic->ic_receive_pdu == NULL,
 		    ("ic->ic_receive_pdu != NULL"));
-		request = icl_pdu_new(ic, M_NOWAIT);
+		request = icl_conn_new_pdu(ic, M_NOWAIT);
 		if (request == NULL) {
 			ICL_DEBUG("failed to allocate PDU; "
 			    "dropping connection");
