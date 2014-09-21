@@ -64,9 +64,12 @@ int			icl_pdu_append_data(struct icl_pdu *ip, const void *addr, size_t len, int 
 void			icl_pdu_get_data(struct icl_pdu *ip, size_t off, void *addr, size_t len);
 void			icl_pdu_queue(struct icl_pdu *ip);
 void			icl_pdu_free(struct icl_pdu *ip);
-struct icl_pdu * icl_pdu_new(struct icl_conn *ic, int flags);
-void icl_pdu_set_data_segment_length(struct icl_pdu *response, uint32_t len);
-size_t icl_pdu_padding(const struct icl_pdu *ip);
+
+#if defined(CHELSIO_OFFLOAD) || 1
+struct icl_pdu		 *icl_pdu_new(struct icl_conn *ic, int flags);
+void			icl_pdu_set_data_segment_length(struct icl_pdu *response, uint32_t len);
+size_t			icl_pdu_padding(const struct icl_pdu *ip);
+#endif
 
 #define ICL_CONN_STATE_INVALID		0
 #define ICL_CONN_STATE_BHS		1
