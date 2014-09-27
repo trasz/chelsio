@@ -1055,11 +1055,11 @@ cfiscsi_data_wait_new(struct cfiscsi_session *cs, union ctl_io *io,
 		return (NULL);
 	}
 
-	error = icl_conn_transfer_new(cs->cs_conn, &cdw->cdw_prv, cdw,
-	    io, target_transfer_tagp, true);
+	error = icl_conn_transfer_setup(cs->cs_conn, &cdw->cdw_prv, io, cdw,
+	    target_transfer_tagp);
 	if (error != 0) {
 		CFISCSI_SESSION_WARN(cs,
-		    "icl_transfer_new() failed with error %d", error);
+		    "icl_transfer_setup() failed with error %d", error);
 		uma_zfree(cfiscsi_data_wait_zone, cdw);
 		return (NULL);
 	}
@@ -1076,7 +1076,7 @@ cfiscsi_data_wait_free(struct cfiscsi_session *cs,
     struct cfiscsi_data_wait *cdw)
 {
 
-	icl_conn_transfer_free(cs->cs_conn, cdw->cdw_prv);
+	icl_conn_transfer_done(cs->cs_conn, cdw->cdw_prv);
 	uma_zfree(cfiscsi_data_wait_zone, cdw);
 }
 

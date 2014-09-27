@@ -102,8 +102,10 @@ static icl_conn_free_t		icl_cxgbei_conn_free;
 static icl_conn_shutdown_t	icl_cxgbei_conn_shutdown;
 static icl_conn_close_t		icl_cxgbei_conn_close;
 static icl_conn_connected_t	icl_cxgbei_conn_connected;
-static icl_conn_transfer_new_t	icl_cxgbei_conn_transfer_new;
-static icl_conn_transfer_free_t	icl_cxgbei_conn_transfer_free;
+static icl_conn_task_setup_t	icl_cxgbei_conn_task_setup;
+static icl_conn_task_done_t	icl_cxgbei_conn_task_done;
+static icl_conn_transfer_setup_t	icl_cxgbei_conn_transfer_setup;
+static icl_conn_transfer_done_t	icl_cxgbei_conn_transfer_done;
 
 static kobj_method_t icl_cxgbei_methods[] = {
 	KOBJMETHOD(icl_conn_new_pdu, icl_cxgbei_conn_new_pdu),
@@ -118,8 +120,10 @@ static kobj_method_t icl_cxgbei_methods[] = {
 	KOBJMETHOD(icl_conn_shutdown, icl_cxgbei_conn_shutdown),
 	KOBJMETHOD(icl_conn_close, icl_cxgbei_conn_close),
 	KOBJMETHOD(icl_conn_connected, icl_cxgbei_conn_connected),
-	KOBJMETHOD(icl_conn_transfer_new, icl_cxgbei_conn_transfer_new),
-	KOBJMETHOD(icl_conn_transfer_free, icl_cxgbei_conn_transfer_free),
+	KOBJMETHOD(icl_conn_task_setup, icl_cxgbei_conn_task_setup),
+	KOBJMETHOD(icl_conn_task_done, icl_cxgbei_conn_task_done),
+	KOBJMETHOD(icl_conn_transfer_setup, icl_cxgbei_conn_transfer_setup),
+	KOBJMETHOD(icl_conn_transfer_done, icl_cxgbei_conn_transfer_done),
 	{ 0, 0 }
 };
 
@@ -1509,8 +1513,39 @@ extern void (*iscsi_ofld_cleanup_io)(void *ic, void *prv);
 #endif
 
 int
-icl_cxgbei_conn_transfer_new(struct icl_conn *ic, void **prvp, void *iop,
-    void *iop2, uint32_t *tag, bool target_side)
+icl_cxgbei_conn_task_setup(struct icl_conn *ic, void **prvp, struct ccb_scsiio *csio,
+    void *iop2, uint32_t *tag)
+{
+#ifdef CHELSIO_OFFLOAD
+	void *prv;
+
+	*tag = icl_conn_build_tasktag(ic, *tag);
+
+	prv = uma_zalloc(icl_transfer_zone, M_NOWAIT | M_ZERO);
+	if (prv == NULL)
+		return (ENOMEM);
+
+	*prvp = prv;
+
+	iscsi_ofld_setup_ddp(ic, prvp, csio, iop2, tag, 0);
+#endif
+
+	return (0);
+}
+
+void
+icl_cxgbei_conn_task_done(struct icl_conn *ic, void *prv)
+{
+
+#ifdef CHELSIO_OFFLOAD
+	iscsi_ofld_cleanup_io(ic, prv);
+	uma_zfree(icl_transfer_zone, prv);
+#endif
+}
+
+int
+icl_cxgbei_conn_transfer_setup(struct icl_conn *ic, void **prvp, union ctl_io *io,
+    void *iop2, uint32_t *tag)
 {
 #ifdef CHELSIO_OFFLOAD
 	void *prv;
@@ -1523,14 +1558,14 @@ icl_cxgbei_conn_transfer_new(struct icl_conn *ic, void **prvp, void *iop,
 
 	*prvp = iop;
 
-	iscsi_ofld_setup_ddp(ic, prvp, iop, iop2, tag, target_side);
+	iscsi_ofld_setup_ddp(ic, prvp, iop, iop2, tag, 1);
 #endif
 
 	return (0);
 }
 
 void
-icl_cxgbei_conn_transfer_free(struct icl_conn *ic, void *prv)
+icl_cxgbei_conn_transfer_done(struct icl_conn *ic, void *prv)
 {
 
 #ifdef CHELSIO_OFFLOAD

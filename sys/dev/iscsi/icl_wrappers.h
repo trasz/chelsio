@@ -115,21 +115,35 @@ icl_conn_connected(struct icl_conn *ic)
 	return (ICL_CONN_CONNECTED(ic));
 }
 
+static inline int
+icl_conn_task_setup(struct icl_conn *ic, void **prvp, struct ccb_scsiio *csio, void *iop2, uint32_t *tag)
+{
+
+	return (ICL_CONN_TASK_SETUP(ic, prvp, csio, iop2, tag));
+}
+
+static inline void
+icl_conn_task_done(struct icl_conn *ic, void *prv)
+{
+
+	ICL_CONN_TASK_DONE(ic, prv);
+}
+
 /*
  * XXX: Get rid of some of the parameters.
  */
 static inline int
-icl_conn_transfer_new(struct icl_conn *ic, void **prvp, void *iop, void *iop2, uint32_t *tag, bool target_side)
+icl_conn_transfer_setup(struct icl_conn *ic, void **prvp, union ctl_io *io, void *iop2, uint32_t *tag)
 {
 
-	return (ICL_CONN_TRANSFER_NEW(ic, prvp, iop, iop2, tag, target_side));
+	return (ICL_CONN_TRANSFER_SETUP(ic, prvp, io, iop2, tag));
 }
 
 static inline void
-icl_conn_transfer_free(struct icl_conn *ic, void *prv)
+icl_conn_transfer_done(struct icl_conn *ic, void *prv)
 {
 
-	ICL_CONN_TRANSFER_FREE(ic, prv);
+	ICL_CONN_TRANSFER_DONE(ic, prv);
 }
 
 #endif /* !ICL_WRAPPERS_H */

@@ -43,6 +43,8 @@
 #include <sys/sysctl.h>
 
 struct icl_conn;
+struct ccb_scsiio;
+union ctl_io;
 
 struct icl_pdu {
 	STAILQ_ENTRY(icl_pdu)	ip_next;

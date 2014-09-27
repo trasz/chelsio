@@ -90,16 +90,28 @@ METHOD bool connected {
 	struct icl_conn *_ic;
 };
 
-METHOD int transfer_new {
+METHOD int task_setup {
 	struct icl_conn *_ic;
 	void **_prvp;
-	void *_iop;
+	struct ccb_scsiio *_csio;
 	void *_iop2;
 	uint32_t *_tag;
-	bool _target_side;
 };
 
-METHOD void transfer_free {
+METHOD void task_done {
+	struct icl_conn *_ic;
+	void *_prv;
+};
+
+METHOD int transfer_setup {
+	struct icl_conn *_ic;
+	void **_prvp;
+	union ctl_io *_io;
+	void *_iop2;
+	uint32_t *_tag;
+};
+
+METHOD void transfer_done {
 	struct icl_conn *_ic;
 	void *_prv;
 };

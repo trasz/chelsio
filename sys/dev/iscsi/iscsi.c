@@ -1973,11 +1973,11 @@ iscsi_outstanding_add(struct iscsi_session *is,
 #if 0
 	if (ccb != NULL && (ccb->ccb_h.flags & CAM_DIR_MASK) == CAM_DIR_IN) {
 #endif
-		error = icl_conn_transfer_new(is->is_conn, &io->io_prv,
-		    &ccb->csio, io, initiator_task_tagp, false);
+		error = icl_conn_task_setup(is->is_conn, &io->io_prv,
+		    &ccb->csio, io, initiator_task_tagp);
 		if (error != 0) {
 			ISCSI_SESSION_WARN(is,
-			    "icl_transfer_new() failed with error %d", error);
+			    "icl_task_setup() failed with error %d", error);
 			uma_zfree(iscsi_outstanding_zone, io);
 			return (NULL);
 		}
@@ -2002,14 +2002,7 @@ iscsi_outstanding_remove(struct iscsi_session *is, struct iscsi_outstanding *io)
 
 	ISCSI_SESSION_LOCK_ASSERT(is);
 
-#if 0
-	if (io->io_ccb != NULL &&
-	    (io->io_ccb->ccb_h.flags & CAM_DIR_MASK) == CAM_DIR_IN) {
-#endif
-		icl_conn_transfer_free(is->is_conn, io->io_prv);
-#if 0
-	}
-#endif
+	icl_conn_task_done(is->is_conn, io->io_prv);
 	TAILQ_REMOVE(&is->is_outstanding, io, io_next);
 	uma_zfree(iscsi_outstanding_zone, io);
 }
