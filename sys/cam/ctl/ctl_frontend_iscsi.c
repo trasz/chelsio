@@ -67,8 +67,9 @@ __FBSDID("$FreeBSD$");
 #include <cam/ctl/ctl_ioctl.h>
 #include <cam/ctl/ctl_private.h>
 
-#include "../../dev/iscsi/icl.h"
-#include "../../dev/iscsi/iscsi_proto.h"
+#include <dev/iscsi/icl.h>
+#include <dev/iscsi/icl_wrappers.h>
+#include <dev/iscsi/iscsi_proto.h>
 #include "ctl_frontend_iscsi.h"
 
 #ifdef ICL_KERNEL_PROXY
@@ -1253,7 +1254,7 @@ cfiscsi_session_new(struct cfiscsi_softc *softc, const char *offload)
 	cv_init(&cs->cs_login_cv, "cfiscsi_login");
 #endif
 
-	cs->cs_conn = icl_conn_new(offload, "cfiscsi", &cs->cs_lock);
+	cs->cs_conn = icl_new_conn(offload, "cfiscsi", &cs->cs_lock);
 	cs->cs_conn->ic_receive = cfiscsi_receive_callback;
 	cs->cs_conn->ic_error = cfiscsi_error_callback;
 	cs->cs_conn->ic_prv0 = cs;

@@ -60,6 +60,7 @@
 #include "iscsi_ioctl.h"
 #include "iscsi.h"
 #include "icl.h"
+#include "icl_wrappers.h"
 #include "iscsi_proto.h"
 
 #ifdef ICL_KERNEL_PROXY
@@ -1700,7 +1701,7 @@ iscsi_ioctl_session_add(struct iscsi_softc *sc, struct iscsi_session_add *isa)
 		return (EBUSY);
 	}
 
-	is->is_conn = icl_conn_new(is->is_conf.isc_offload,
+	is->is_conn = icl_new_conn(is->is_conf.isc_offload,
 	    "iscsi", &is->is_lock);
 	is->is_conn->ic_receive = iscsi_receive_callback;
 	is->is_conn->ic_error = iscsi_error_callback;

@@ -37,6 +37,11 @@
  * and receive iSCSI PDUs.
  */
 
+#include <sys/types.h>
+#include <sys/kobj.h>
+#include <sys/condvar.h>
+#include <sys/sysctl.h>
+
 struct icl_conn;
 
 struct icl_pdu {
@@ -58,18 +63,6 @@ struct icl_pdu {
 	uint32_t		ip_ofld_prv0;/* indicate iscsi-inititor that data is DDP'ed */
 };
 
-size_t			icl_pdu_data_segment_length(const struct icl_pdu *ip);
-int			icl_pdu_append_data(struct icl_pdu *ip, const void *addr, size_t len, int flags);
-void			icl_pdu_get_data(struct icl_pdu *ip, size_t off, void *addr, size_t len);
-void			icl_pdu_queue(struct icl_pdu *ip);
-void			icl_pdu_free(struct icl_pdu *ip);
-
-#if defined(CHELSIO_OFFLOAD) || 1
-struct icl_pdu		 *icl_conn_new_pdu(struct icl_conn *ic, int flags);
-void			icl_pdu_set_data_segment_length(struct icl_pdu *response, uint32_t len);
-size_t			icl_pdu_padding(const struct icl_pdu *ip);
-#endif
-
 #define ICL_CONN_STATE_INVALID		0
 #define ICL_CONN_STATE_BHS		1
 #define ICL_CONN_STATE_AHS		2
@@ -80,6 +73,7 @@ size_t			icl_pdu_padding(const struct icl_pdu *ip);
 #define	ICL_MAX_DATA_SEGMENT_LENGTH	(128 * 1024)
 
 struct icl_conn {
+	KOBJ_FIELDS;
 	struct mtx		*ic_lock;
 	struct socket		*ic_socket;
 #ifdef DIAGNOSTIC
@@ -111,19 +105,34 @@ struct icl_conn {
 	void			*ic_prv0;
 };
 
-struct icl_pdu		*icl_conn_new_pdu_bhs(struct icl_conn *ic, int flags);
-struct icl_conn		*icl_conn_new(const char *offload, const char *name, struct mtx *lock);
-void			icl_conn_free(struct icl_conn *ic);
-int			icl_conn_handoff(struct icl_conn *ic, int fd);
-void			icl_conn_shutdown(struct icl_conn *ic);
-void			icl_conn_close(struct icl_conn *ic);
-bool			icl_conn_connected(struct icl_conn *ic);
+
+struct icl_conn	*icl_new_conn(const char *offload, const char *name, struct mtx *lock);
+int		icl_limits(const char *name, size_t *limitp);
+
+int		icl_register(const char *offload, int (*limits)(size_t *),
+		    struct icl_conn *(*new_conn)(const char *, struct mtx *));
+int		icl_unregister(const char *offload);
+
 /*
- * XXX: Get rid of some of the parameters.
+ * XXX
  */
-int			icl_conn_transfer_new(struct icl_conn *ic, void **prvp, void *iop, void *iop2, uint32_t *tag, bool target_side);
-void			icl_conn_transfer_free(struct icl_conn *ic, void *prv);
-int			icl_limits(const char *name, size_t *limitp);
+SYSCTL_DECL(_kern_icl);
+
+extern int icl_debug;
+
+#define	ICL_DEBUG(X, ...)						\
+	do {								\
+		if (icl_debug > 1)					\
+			printf("%s: " X "\n", __func__, ## __VA_ARGS__);\
+	} while (0)
+
+#define	ICL_WARN(X, ...)						\
+	do {								\
+		if (icl_debug > 0) {					\
+			printf("WARNING: %s: " X "\n",			\
+			    __func__, ## __VA_ARGS__);			\
+		}							\
+	} while (0)
 
 #ifdef ICL_KERNEL_PROXY
 
