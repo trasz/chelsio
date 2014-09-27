@@ -1545,7 +1545,7 @@ icl_soft_load(void)
 	 * it's known as "offload driver"; "offload driver: soft"
 	 * doesn't make much sense.
 	 */
-	error = icl_register("none", icl_soft_limits, icl_soft_new_conn);
+	error = icl_register("none", 0, icl_soft_limits, icl_soft_new_conn);
 	KASSERT(error == 0, ("failed to register"));
 
 	return (0);

@@ -53,6 +53,7 @@
 struct icl_module {
 	TAILQ_ENTRY(icl_module)		im_next;
 	char				*im_name;
+	int				im_priority;
 	int				(*im_limits)(size_t *limitp);
 	struct icl_conn			*(*im_new_conn)(const char *name,
 					    struct mtx *lock);
@@ -71,24 +72,26 @@ SYSCTL_INT(_kern_icl, OID_AUTO, debug, CTLFLAG_RWTUN,
 static MALLOC_DEFINE(M_ICL, "icl_soft", "iSCSI Common Layer");
 static struct icl_softc	*sc;
 
-#define ICL_CONN_LOCK(X)		mtx_lock(X->ic_lock)
-#define ICL_CONN_UNLOCK(X)		mtx_unlock(X->ic_lock)
-#define ICL_CONN_LOCK_ASSERT(X)		mtx_assert(X->ic_lock, MA_OWNED)
-#define ICL_CONN_LOCK_ASSERT_NOT(X)	mtx_assert(X->ic_lock, MA_NOTOWNED)
-
 static struct icl_module *
-icl_find_by_name(const char *name)
+icl_find(const char *name)
 {
-	struct icl_module *im;
+	struct icl_module *im, *im_max;
 
 	sx_assert(&sc->sc_lock, SA_LOCKED);
 
 	/*
-	 * If the name was not specified, fall back to software,
-	 * which registers itself as "none".
+	 * If the name was not specified, pick a module with highest
+	 * priority.
 	 */
-	if (name[0] == '\0')
-		return (icl_find_by_name("none"));
+	if (name[0] == '\0') {
+		im_max = TAILQ_FIRST(&sc->sc_modules);
+		TAILQ_FOREACH(im, &sc->sc_modules, im_next) {
+			if (im->im_priority > im_max->im_priority)
+				im_max = im;
+		}
+
+		return (im_max);
+	}
 
 	TAILQ_FOREACH(im, &sc->sc_modules, im_next) {
 		if (strcmp(im->im_name, name) == 0)
@@ -105,7 +108,7 @@ icl_new_conn(const char *offload, const char *name, struct mtx *lock)
 	struct icl_conn *ic;
 
 	sx_slock(&sc->sc_lock);
-	im = icl_find_by_name(offload);
+	im = icl_find(offload);
 
 	if (im == NULL) {
 		sx_sunlock(&sc->sc_lock);
@@ -125,7 +128,7 @@ icl_limits(const char *offload, size_t *limitp)
 	int error;
 
 	sx_slock(&sc->sc_lock);
-	im = icl_find_by_name(offload);
+	im = icl_find(offload);
 
 	if (im == NULL) {
 		sx_sunlock(&sc->sc_lock);
@@ -140,13 +143,13 @@ icl_limits(const char *offload, size_t *limitp)
 
 
 int
-icl_register(const char *offload, int (*limits)(size_t *),
+icl_register(const char *offload, int priority, int (*limits)(size_t *),
     struct icl_conn *(*new_conn)(const char *, struct mtx *))
 {
 	struct icl_module *im;
 
 	sx_xlock(&sc->sc_lock);
-	im = icl_find_by_name(offload);
+	im = icl_find(offload);
 
 	if (im != NULL) {
 		sx_xunlock(&sc->sc_lock);
@@ -155,6 +158,7 @@ icl_register(const char *offload, int (*limits)(size_t *),
 
 	im = malloc(sizeof(*im), M_ICL, M_ZERO | M_WAITOK);
 	im->im_name = strdup(offload, M_ICL);
+	im->im_priority = priority;
 	im->im_limits = limits;
 	im->im_new_conn = new_conn;
 
@@ -170,7 +174,7 @@ icl_unregister(const char *name)
 	struct icl_module *im;
 
 	sx_xlock(&sc->sc_lock);
-	im = icl_find_by_name(name);
+	im = icl_find(name);
 
 	if (im == NULL) {
 		sx_xunlock(&sc->sc_lock);

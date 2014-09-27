@@ -1220,7 +1220,7 @@ icl_cxgbei_new_conn(const char *name, struct mtx *lock)
 #endif
 	ic->ic_max_data_segment_length = ICL_MAX_DATA_SEGMENT_LENGTH;
 	ic->ic_name = name;
-	ic->ic_offload = strdup("none", M_TEMP);
+	ic->ic_offload = strdup("cxgbei", M_TEMP);
 
 	return (ic);
 }
@@ -1578,11 +1578,7 @@ static int
 icl_cxgbei_limits(size_t *limitp)
 {
 
-#ifdef CHELSIO_OFFLOAD
 	*limitp = 8 * 1024;
-#else
-	*limitp = 128 * 1024;
-#endif
 
 	return (0);
 }
@@ -1627,7 +1623,7 @@ icl_cxgbei_load(void)
 #endif
 	refcount_init(&icl_ncons, 0);
 
-	error = icl_register("cxgbei", icl_cxgbei_limits, icl_cxgbei_new_conn);
+	error = icl_register("cxgbei", 100, icl_cxgbei_limits, icl_cxgbei_new_conn);
 	KASSERT(error == 0, ("failed to register"));
 
 	return (0);

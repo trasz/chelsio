@@ -108,10 +108,12 @@ struct icl_conn {
 };
 
 
-struct icl_conn	*icl_new_conn(const char *offload, const char *name, struct mtx *lock);
-int		icl_limits(const char *name, size_t *limitp);
+struct icl_conn	*icl_new_conn(const char *offload, const char *name,
+		    struct mtx *lock);
+int		icl_limits(const char *offload, size_t *limitp);
 
-int		icl_register(const char *offload, int (*limits)(size_t *),
+int		icl_register(const char *offload, int priority,
+		    int (*limits)(size_t *),
 		    struct icl_conn *(*new_conn)(const char *, struct mtx *));
 int		icl_unregister(const char *offload);
 
