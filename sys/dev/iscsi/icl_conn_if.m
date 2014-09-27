@@ -64,7 +64,7 @@ METHOD void pdu_free {
 	struct icl_pdu *_ip;
 };
 
-METHOD struct icl_pdu * new_pdu_bhs {
+METHOD struct icl_pdu * new_pdu {
 	struct icl_conn *_ic;
 	int _flags;
 };

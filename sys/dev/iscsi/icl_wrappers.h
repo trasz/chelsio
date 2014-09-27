@@ -74,10 +74,10 @@ icl_pdu_free(struct icl_pdu *ip)
 }
 
 static inline struct icl_pdu *
-icl_conn_new_pdu_bhs(struct icl_conn *ic, int flags)
+icl_conn_new_pdu(struct icl_conn *ic, int flags)
 {
 
-	return (ICL_CONN_NEW_PDU_BHS(ic, flags));
+	return (ICL_CONN_NEW_PDU(ic, flags));
 }
 
 static inline void

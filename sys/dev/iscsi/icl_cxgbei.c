@@ -90,7 +90,7 @@ static volatile u_int	icl_ncons;
 
 STAILQ_HEAD(icl_pdu_stailq, icl_pdu);
 
-static icl_conn_new_pdu_bhs_t	icl_cxgbei_conn_new_pdu_bhs;
+static icl_conn_new_pdu_t	icl_cxgbei_conn_new_pdu;
 static icl_conn_pdu_free_t	icl_cxgbei_conn_pdu_free;
 static icl_conn_pdu_data_segment_length_t
 				    icl_cxgbei_conn_pdu_data_segment_length;
@@ -106,7 +106,7 @@ static icl_conn_transfer_new_t	icl_cxgbei_conn_transfer_new;
 static icl_conn_transfer_free_t	icl_cxgbei_conn_transfer_free;
 
 static kobj_method_t icl_cxgbei_methods[] = {
-	KOBJMETHOD(icl_conn_new_pdu_bhs, icl_cxgbei_conn_new_pdu_bhs),
+	KOBJMETHOD(icl_conn_new_pdu, icl_cxgbei_conn_new_pdu),
 	KOBJMETHOD(icl_conn_pdu_free, icl_cxgbei_conn_pdu_free),
 	KOBJMETHOD(icl_conn_pdu_data_segment_length,
 	    icl_cxgbei_conn_pdu_data_segment_length),
@@ -172,7 +172,7 @@ icl_conn_receive(struct icl_conn *ic, size_t len)
 }
 
 static struct icl_pdu *
-icl_conn_new_pdu(struct icl_conn *ic, int flags)
+icl_conn_new_empty_pdu(struct icl_conn *ic, int flags)
 {
 	struct icl_pdu *ip;
 
@@ -219,11 +219,11 @@ icl_cxgbei_conn_pdu_free(struct icl_conn *ic, struct icl_pdu *ip)
  * Allocate icl_pdu with empty BHS to fill up by the caller.
  */
 struct icl_pdu *
-icl_cxgbei_conn_new_pdu_bhs(struct icl_conn *ic, int flags)
+icl_cxgbei_conn_new_pdu(struct icl_conn *ic, int flags)
 {
 	struct icl_pdu *ip;
 
-	ip = icl_conn_new_pdu(ic, flags);
+	ip = icl_conn_new_empty_pdu(ic, flags);
 	if (ip == NULL)
 		return (NULL);
 
@@ -595,7 +595,7 @@ icl_conn_receive_pdu(struct icl_conn *ic, size_t *availablep)
 	if (ic->ic_receive_state == ICL_CONN_STATE_BHS) {
 		KASSERT(ic->ic_receive_pdu == NULL,
 		    ("ic->ic_receive_pdu != NULL"));
-		request = icl_conn_new_pdu(ic, M_NOWAIT);
+		request = icl_conn_new_empty_pdu(ic, M_NOWAIT);
 		if (request == NULL) {
 			ICL_DEBUG("failed to allocate PDU; "
 			    "dropping connection");
