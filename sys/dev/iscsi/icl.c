@@ -111,6 +111,7 @@ icl_new_conn(const char *offload, const char *name, struct mtx *lock)
 	im = icl_find(offload);
 
 	if (im == NULL) {
+		ICL_WARN("offload \"%s\" not found", offload);
 		sx_sunlock(&sc->sc_lock);
 		return (NULL);
 	}
@@ -131,8 +132,9 @@ icl_limits(const char *offload, size_t *limitp)
 	im = icl_find(offload);
 
 	if (im == NULL) {
+		ICL_WARN("offload \"%s\" not found", offload);
 		sx_sunlock(&sc->sc_lock);
-		return (EINVAL);
+		return (ENXIO);
 	}
 
 	error = im->im_limits(limitp);
@@ -152,6 +154,7 @@ icl_register(const char *offload, int priority, int (*limits)(size_t *),
 	im = icl_find(offload);
 
 	if (im != NULL) {
+		ICL_WARN("offload \"%s\" already registered", offload);
 		sx_xunlock(&sc->sc_lock);
 		return (EBUSY);
 	}
@@ -169,16 +172,17 @@ icl_register(const char *offload, int priority, int (*limits)(size_t *),
 }
 
 int
-icl_unregister(const char *name)
+icl_unregister(const char *offload)
 {
 	struct icl_module *im;
 
 	sx_xlock(&sc->sc_lock);
-	im = icl_find(name);
+	im = icl_find(offload);
 
 	if (im == NULL) {
+		ICL_WARN("offload \"%s\" not registered", offload);
 		sx_xunlock(&sc->sc_lock);
-		return (ESRCH);
+		return (ENXIO);
 	}
 
 	TAILQ_REMOVE(&sc->sc_modules, im, im_next);
