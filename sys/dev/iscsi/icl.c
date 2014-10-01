@@ -168,6 +168,7 @@ icl_register(const char *offload, int priority, int (*limits)(size_t *),
 	TAILQ_INSERT_HEAD(&sc->sc_modules, im, im_next);
 	sx_xunlock(&sc->sc_lock);
 
+	ICL_DEBUG("offload \"%s\" registered", offload);
 	return (0);
 }
 
@@ -190,6 +191,7 @@ icl_unregister(const char *offload)
 
 	free(im, M_ICL);
 
+	ICL_DEBUG("offload \"%s\" unregistered", offload);
 	return (0);
 }
 
