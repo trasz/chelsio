@@ -1626,7 +1626,7 @@ icl_cxgbei_load(void)
 	error = icl_register("cxgbei", 100, icl_cxgbei_limits, icl_cxgbei_new_conn);
 	KASSERT(error == 0, ("failed to register"));
 
-	return (0);
+	return (error);
 }
 
 static int

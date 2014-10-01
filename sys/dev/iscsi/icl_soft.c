@@ -1548,7 +1548,7 @@ icl_soft_load(void)
 	error = icl_register("none", 0, icl_soft_limits, icl_soft_new_conn);
 	KASSERT(error == 0, ("failed to register"));
 
-	return (0);
+	return (error);
 }
 
 static int
