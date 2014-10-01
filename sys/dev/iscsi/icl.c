@@ -69,7 +69,7 @@ int icl_debug = 1;
 SYSCTL_INT(_kern_icl, OID_AUTO, debug, CTLFLAG_RWTUN,
     &icl_debug, 0, "Enable debug messages");
 
-static MALLOC_DEFINE(M_ICL, "icl_soft", "iSCSI Common Layer");
+static MALLOC_DEFINE(M_ICL, "icl", "iSCSI Common Layer");
 static struct icl_softc	*sc;
 
 static struct icl_module *
@@ -189,6 +189,7 @@ icl_unregister(const char *offload)
 	TAILQ_REMOVE(&sc->sc_modules, im, im_next);
 	sx_xunlock(&sc->sc_lock);
 
+	free(im->im_name, M_ICL);
 	free(im, M_ICL);
 
 	ICL_DEBUG("offload \"%s\" unregistered", offload);
