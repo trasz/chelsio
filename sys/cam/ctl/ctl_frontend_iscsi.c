@@ -1055,7 +1055,7 @@ cfiscsi_data_wait_new(struct cfiscsi_session *cs, union ctl_io *io,
 		return (NULL);
 	}
 
-	error = icl_conn_transfer_setup(cs->cs_conn, &cdw->cdw_prv, io, cdw,
+	error = icl_conn_transfer_setup(cs->cs_conn, &cdw->cdw_prv, io,
 	    target_transfer_tagp);
 	if (error != 0) {
 		CFISCSI_SESSION_WARN(cs,

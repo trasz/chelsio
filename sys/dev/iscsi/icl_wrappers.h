@@ -116,10 +116,10 @@ icl_conn_connected(struct icl_conn *ic)
 }
 
 static inline int
-icl_conn_task_setup(struct icl_conn *ic, void **prvp, struct ccb_scsiio *csio, void *iop2, uint32_t *tag)
+icl_conn_task_setup(struct icl_conn *ic, void **prvp, struct ccb_scsiio *csio, uint32_t *tag)
 {
 
-	return (ICL_CONN_TASK_SETUP(ic, prvp, csio, iop2, tag));
+	return (ICL_CONN_TASK_SETUP(ic, prvp, csio, tag));
 }
 
 static inline void
@@ -129,14 +129,11 @@ icl_conn_task_done(struct icl_conn *ic, void *prv)
 	ICL_CONN_TASK_DONE(ic, prv);
 }
 
-/*
- * XXX: Get rid of some of the parameters.
- */
 static inline int
-icl_conn_transfer_setup(struct icl_conn *ic, void **prvp, union ctl_io *io, void *iop2, uint32_t *tag)
+icl_conn_transfer_setup(struct icl_conn *ic, void **prvp, union ctl_io *io, uint32_t *tag)
 {
 
-	return (ICL_CONN_TRANSFER_SETUP(ic, prvp, io, iop2, tag));
+	return (ICL_CONN_TRANSFER_SETUP(ic, prvp, io, tag));
 }
 
 static inline void

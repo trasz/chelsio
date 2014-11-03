@@ -94,7 +94,6 @@ METHOD int task_setup {
 	struct icl_conn *_ic;
 	void **_prvp;
 	struct ccb_scsiio *_csio;
-	void *_iop2;
 	uint32_t *_tag;
 };
 
@@ -107,7 +106,6 @@ METHOD int transfer_setup {
 	struct icl_conn *_ic;
 	void **_prvp;
 	union ctl_io *_io;
-	void *_iop2;
 	uint32_t *_tag;
 };
 

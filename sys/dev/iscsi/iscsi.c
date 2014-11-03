@@ -1974,7 +1974,7 @@ iscsi_outstanding_add(struct iscsi_session *is,
 	if (ccb != NULL && (ccb->ccb_h.flags & CAM_DIR_MASK) == CAM_DIR_IN) {
 #endif
 		error = icl_conn_task_setup(is->is_conn, &io->io_prv,
-		    &ccb->csio, io, initiator_task_tagp);
+		    &ccb->csio, initiator_task_tagp);
 		if (error != 0) {
 			ISCSI_SESSION_WARN(is,
 			    "icl_task_setup() failed with error %d", error);

@@ -1514,7 +1514,7 @@ extern void (*iscsi_ofld_cleanup_io)(void *ic, void *prv);
 
 int
 icl_cxgbei_conn_task_setup(struct icl_conn *ic, void **prvp, struct ccb_scsiio *csio,
-    void *iop2, uint32_t *tag)
+    uint32_t *tag)
 {
 #ifdef CHELSIO_OFFLOAD
 	void *prv;
@@ -1527,7 +1527,7 @@ icl_cxgbei_conn_task_setup(struct icl_conn *ic, void **prvp, struct ccb_scsiio *
 
 	*prvp = prv;
 
-	iscsi_ofld_setup_ddp(ic, prvp, csio, iop2, tag, 0);
+	iscsi_ofld_setup_ddp(ic, prvp, csio, tag, 0);
 #endif
 
 	return (0);
@@ -1545,7 +1545,7 @@ icl_cxgbei_conn_task_done(struct icl_conn *ic, void *prv)
 
 int
 icl_cxgbei_conn_transfer_setup(struct icl_conn *ic, void **prvp, union ctl_io *io,
-    void *iop2, uint32_t *tag)
+    uint32_t *tag)
 {
 #ifdef CHELSIO_OFFLOAD
 	void *prv;
@@ -1558,7 +1558,7 @@ icl_cxgbei_conn_transfer_setup(struct icl_conn *ic, void **prvp, union ctl_io *i
 
 	*prvp = iop;
 
-	iscsi_ofld_setup_ddp(ic, prvp, iop, iop2, tag, 1);
+	iscsi_ofld_setup_ddp(ic, prvp, iop, tag, 1);
 #endif
 
 	return (0);

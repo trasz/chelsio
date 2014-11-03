@@ -1472,7 +1472,7 @@ icl_soft_conn_connected(struct icl_conn *ic)
 
 int
 icl_soft_conn_task_setup(struct icl_conn *ic, void **prvp, struct ccb_scsiio *csio,
-    void *iop2, uint32_t *tag)
+    uint32_t *tag)
 {
 
 	return (0);
@@ -1485,7 +1485,7 @@ icl_soft_conn_task_done(struct icl_conn *ic, void *prv)
 
 int
 icl_soft_conn_transfer_setup(struct icl_conn *ic, void **prvp, union ctl_io *io,
-    void *iop2, uint32_t *tag)
+    uint32_t *tag)
 {
 
 	return (0);
